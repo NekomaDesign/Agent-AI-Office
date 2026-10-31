@@ -28,7 +28,7 @@ Creative Director tên là **Nekoma**. Xưng hô: agent xưng "em", gọi CD là
 
 ## GIAO THỨC STUDIO (bắt buộc ở MỌI bước)
 
-Văn phòng 3D (`npm run dev`) đọc các file trong `.studio/` mỗi 3 giây. Nếu không ghi file,
+Văn phòng 3D (`start-studio.bat`) đọc các file trong `.studio/` mỗi 3 giây. Nếu không ghi file,
 văn phòng sẽ không thấy agent làm việc.
 
 ### 1. Trạng thái — ghi đè `.studio/status/<id>.json`
@@ -98,6 +98,14 @@ nói file nào là gì.
 ### Thời gian
 
 Dùng giờ Việt Nam (+07:00), định dạng ISO 8601. Lấy giờ bằng lệnh hệ thống, không đoán.
+
+## Lệnh gửi từ văn phòng 3D
+
+Anh Nekoma có thể gõ lệnh ngay trong văn phòng (ô chat). Khi đó Claude Code chạy ở chế độ nền
+(`claude -p`), lời anh đã được ghi sẵn vào `.studio/chat/dieu-phoi.jsonl`.
+- Không hỏi lại giữa chừng được → thiếu thông tin thì để agent liên quan `blocked` và nhắn anh.
+- Vẫn ghi status/chat/tasks theo giao thức như bình thường (kể cả lời giao việc của anh vào chat của task).
+- Câu trả lời cuối cùng ngắn gọn 1–3 câu: ai nhận việc gì, kết quả ở đâu.
 
 ## Cấu trúc thư mục
 

@@ -33,6 +33,17 @@ Trình duyệt tự mở `http://localhost:5173`. Giữ cửa sổ server mở t
 
 ## Giao việc cho agent
 
+### Cách 1 — gõ ngay trên web (khuyên dùng)
+
+Gõ vào ô chat ở góc dưới trái văn phòng hoặc tab **Phòng hội thoại**, rồi bấm Enter.
+Server trên máy sẽ gọi Claude Code chạy nền để chuyển việc cho đúng người. Bấm tên agent phía trên ô chat để chèn nhanh "Ink ơi, …".
+
+- Lệnh xếp hàng lần lượt. Claude nhớ ngữ cảnh các lệnh trước, bấm **Phiên mới** để bắt đầu lại.
+- Ở chế độ này agent được tự ghi file trong dự án, được đọc web và chạy lệnh `date`/`mkdir`/`ls`. Các lệnh hệ thống khác bị chặn.
+- Cần đăng nhập Claude Code ít nhất một lần (gõ `claude` trong PowerShell).
+
+### Cách 2 — trong Claude Code
+
 Mở một cửa sổ PowerShell **khác**:
 
 ```powershell

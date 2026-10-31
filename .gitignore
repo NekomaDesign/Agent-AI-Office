@@ -6,6 +6,7 @@
 .studio/chat/*.jsonl
 .studio/reports/*.md
 .studio/archive/*
+.studio/session.json
 !.studio/archive/.gitkeep
 outputs/*
 !outputs/.gitkeep

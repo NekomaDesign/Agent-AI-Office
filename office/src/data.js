@@ -30,6 +30,7 @@ export function normalize(raw = {}) {
     tasks,
     chats,
     reports: Array.isArray(raw.reports) ? raw.reports : [],
+    runner: raw.runner || null,
   };
 }
 

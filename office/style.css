@@ -215,3 +215,31 @@ td .proj { font: 600 11px var(--mono); color: var(--ink-3); display: block; marg
   .msgs { max-height: 60vh; }
   .msg { max-width: 92%; }
 }
+
+/* ---------- Ô gõ lệnh ---------- */
+.chat-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.chat-col .msgs { flex: 1; min-height: 0; }
+.composer { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px; box-shadow: var(--shadow); }
+.composer-mini { margin: 0 10px 10px; box-shadow: none; padding: 6px; }
+.composer[data-state="busy"] { border-color: #f0a81c; }
+.composer[data-state="warn"] { border-color: #d93a2b; }
+.mention-row { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 8px; }
+.mention { --c: #888; border: 1px solid var(--line); background: var(--paper-2); border-radius: 999px; padding: 4px 10px 4px 8px; font: 600 12px var(--font); display: inline-flex; align-items: center; gap: 6px; }
+.mention::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.mention:hover { border-color: var(--c); }
+.comp-form { display: flex; gap: 8px; align-items: flex-end; }
+.comp-form textarea { flex: 1; resize: none; border: 0; outline: none; font: 500 14px/1.45 var(--font); color: var(--ink); background: transparent; padding: 7px 8px; min-height: 36px; max-height: 140px; }
+.composer-mini .comp-form textarea { font-size: 13px; }
+.comp-form textarea:disabled { color: var(--ink-3); }
+.comp-form .send { border: 0; background: var(--orange); color: #fff; font: 700 13px var(--font); padding: 9px 16px; border-radius: 10px; }
+.comp-form .send:disabled { background: #d8d1c6; cursor: default; }
+.comp-status { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 8px 2px; font: 500 11.5px var(--mono); color: var(--ink-3); min-height: 18px; }
+.comp-status code { font-size: 11px; background: var(--paper-2); padding: 1px 5px; border-radius: 4px; }
+.composer[data-state="busy"] .comp-status { color: #8a5d00; }
+.composer[data-state="warn"] .comp-status { color: #b3261e; }
+.comp-status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f0a81c; margin-right: 4px; animation: blink 1s infinite; }
+.cs-new { border: 1px solid var(--line); background: var(--paper-2); border-radius: 6px; padding: 3px 8px; font: 600 11px var(--mono); flex: none; }
+.avatar.bot { background: var(--paper-2); color: var(--ink); border: 1px dashed var(--ink-3); }
+.msg.bot .text { background: #f6f2ec; border-style: dashed; }
+.chat-layout { height: calc(100vh - 170px); }
+@media (max-width: 820px) { .chat-layout { height: auto; } .chat-col .msgs { max-height: 55vh; } }

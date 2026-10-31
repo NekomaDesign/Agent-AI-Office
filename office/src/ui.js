@@ -1,6 +1,8 @@
 // Giao diện 2D: sidebar, mini chat, bảng công việc, phòng hội thoại, phòng Kuma, toast.
 import { AGENTS, CD, PEOPLE, STATES } from './agents.js';
 
+let MODE = 'connecting';
+
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -19,8 +21,8 @@ const hhmm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLoca
 
 function avatar(id) {
   const p = PEOPLE[id] || { name: id || '?', color: '#888' };
-  const face = id === 'kuma' ? '🐻' : esc((p.name || '?')[0]);
-  return `<span class="avatar ${p.human ? 'human' : ''}" style="--c:${p.color}">${face}</span>`;
+  const face = id === 'kuma' ? '🐻' : id === 'studio' ? '✦' : esc((p.name || '?')[0]);
+  return `<span class="avatar ${p.human ? 'human' : ''} ${p.bot ? 'bot' : ''}" style="--c:${p.color}">${face}</span>`;
 }
 const nameOf = (id) => (id === 'cd' ? `Anh ${CD.name}` : (PEOPLE[id]?.name || id || '?'));
 const pill = (s) => { const st = STATES[s] || STATES.idle; return `<span class="pill" data-s="${s}" style="--c:${st.color}">${st.label}</span>`; };
@@ -50,6 +52,9 @@ export function createUI({ world }) {
   $('#mini-more').addEventListener('click', (e) => { e.stopPropagation(); setView('chat'); });
   $('#mini-toggle').addEventListener('click', () => $('#mini-chat').classList.toggle('collapsed'));
 
+  // ---- ô gõ lệnh ----
+  const composers = [...document.querySelectorAll('[data-composer]')].map((el) => createComposer(el, () => data, (d) => { if (d) update(d); }));
+
   function setView(v) {
     view = v;
     tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
@@ -57,7 +62,7 @@ export function createUI({ world }) {
     $('#mini-chat').style.display = v === 'office' ? '' : 'none';
     world.setPaused(v !== 'office');
     render();
-    if (v === 'chat') { const m = $('.msgs'); if (m) m.scrollTop = m.scrollHeight; }
+    if (v === 'chat') { const m = $('#msgs'); if (m) m.scrollTop = m.scrollHeight; }
   }
 
   function select(id, fly = true) {
@@ -69,12 +74,14 @@ export function createUI({ world }) {
 
   // ---- mode ----
   function setMode(mode) {
+    MODE = mode;
+    composers.forEach((c) => c.refresh());
     const chip = $('#mode-chip');
     chip.dataset.mode = mode;
     chip.textContent = { connecting: 'ĐANG KẾT NỐI…', live: '● LIVE · ĐỌC .studio/', demo: 'DEMO · DỮ LIỆU GIẢ LẬP', offline: 'MẤT KẾT NỐI SERVER' }[mode];
     $('#mode-box').innerHTML = {
       connecting: 'Đang tìm server của studio…',
-      live: '<b>LIVE</b> — đang đọc trạng thái thật trong thư mục <code>.studio/</code>. Giao việc trong Claude Code là văn phòng tự cập nhật.',
+      live: '<b>LIVE</b> — đang đọc trạng thái thật trong <code>.studio/</code>. Gõ lệnh ở ô chat (góc dưới trái hoặc Phòng hội thoại), Claude Code trên máy sẽ chuyển việc cho đúng người.',
       demo: '<b>DEMO</b> — dữ liệu giả lập, không nối với agent thật. Chạy <code>start-studio.bat</code> trên máy để xem studio thật.',
       offline: '<b>Mất kết nối</b> — cửa sổ server đã tắt? Chạy lại <code>start-studio.bat</code>.',
     }[mode];
@@ -110,6 +117,7 @@ export function createUI({ world }) {
 
     world.update(d);
     render();
+    composers.forEach((c) => c.refresh());
   }
 
   function toast(a, state, task) {
@@ -218,25 +226,29 @@ export function createUI({ world }) {
       .sort((a, b) => String(b[1].at(-1).time).localeCompare(String(a[1].at(-1).time)));
     const total = threads.reduce((n, [, l]) => n + l.length, 0);
     if (activeThread !== 'all' && !data.chats[activeThread]) activeThread = 'all';
+    $('#chat-eyebrow').textContent = `${data.studio.name} · PHÒNG HỘI THOẠI`;
     const list = `<button class="thread ${activeThread === 'all' ? 'active' : ''}" data-t="all"><small>TẤT CẢ</small><b>${total} tin nhắn</b></button>` +
       threads.map(([id, l]) => { const tt = threadTitle(id); return `<button class="thread ${activeThread === id ? 'active' : ''}" data-t="${esc(id)}"><small>${esc(tt.project)} · ${l.length} TIN</small><b>${esc(tt.title)}</b></button>`; }).join('');
 
     const shown = activeThread === 'all' ? threads.slice().reverse() : threads.filter(([id]) => id === activeThread);
-    const msgs = shown.length ? shown.map(([id, l]) => { const tt = threadTitle(id);
+    const html = shown.length ? shown.map(([id, l]) => { const tt = threadTitle(id);
       return `<div class="msg-group-title">${esc(tt.project ? tt.project + ' · ' : '')}${esc(tt.title).toUpperCase()}</div>` + l.map((m) => {
         const me = m.from === 'cd'; const p = PEOPLE[m.from] || { color: '#888' };
-        return `<div class="msg ${me ? 'me' : ''}">${avatar(m.from)}<div><div class="meta" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · ${hhmm(m.time)}</div><div class="text">${esc(m.text)}</div></div></div>`;
+        return `<div class="msg ${me ? 'me' : ''} ${m.from === 'studio' ? 'bot' : ''}">${avatar(m.from)}<div><div class="meta" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · ${hhmm(m.time)}</div><div class="text">${esc(m.text)}</div></div></div>`;
       }).join(''); }).join('')
-      : '<div class="empty"><b>Phòng hội thoại còn trống</b>Mỗi lần anh giao việc, agent sẽ ghi lời trao đổi vào <code>.studio/chat/</code>.</div>';
+      : '<div class="empty"><b>Phòng hội thoại còn trống</b>Gõ lệnh ở ô bên dưới để giao việc cho team.</div>';
 
-    const box = $('#view-chat');
-    const prevScroll = box.querySelector('.msgs');
-    const atBottom = !prevScroll || prevScroll.scrollTop + prevScroll.clientHeight >= prevScroll.scrollHeight - 30;
-    box.innerHTML = `<div class="ov-head"><div><div class="ov-eyebrow">${esc(data.studio.name)} · PHÒNG HỘI THOẠI</div><h2>Team đang trao đổi</h2></div></div>
-      <div class="chat-layout"><div class="thread-list">${list}</div><div class="msgs">${msgs}</div></div>`;
-    box.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeThread = b.dataset.t; renderChat(); const m = $('.msgs'); m.scrollTop = m.scrollHeight; }));
-    const m = box.querySelector('.msgs');
-    if (atBottom) m.scrollTop = m.scrollHeight; else m.scrollTop = prevScroll.scrollTop;
+    const tl = $('#thread-list');
+    if (tl.dataset.sig !== list) {
+      tl.innerHTML = list; tl.dataset.sig = list;
+      tl.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeThread = b.dataset.t; renderChat(); const m = $('#msgs'); m.scrollTop = m.scrollHeight; }));
+    }
+    const m = $('#msgs');
+    if (m.dataset.sig !== html) {
+      const atBottom = m.scrollTop + m.clientHeight >= m.scrollHeight - 40;
+      m.innerHTML = html; m.dataset.sig = html;
+      if (atBottom) m.scrollTop = m.scrollHeight;
+    }
   }
 
   function renderKuma() {
@@ -257,11 +269,97 @@ export function createUI({ world }) {
   setInterval(() => {
     const t = lastUpdate ? lastUpdate.toLocaleTimeString('vi-VN', { hour12: false }) : '--:--:--';
     $('#clock-chip').textContent = `CẬP NHẬT LÚC ${t}`;
+    composers.forEach((c) => c.tickClock());
   }, 500);
   // làm mới "x phút trước"
   setInterval(() => { if (data) { renderMini(); } }, 15000);
 
   return { update, setMode, select, setView };
+}
+
+
+// ======================================================================
+// Ô gõ lệnh: gửi lệnh tới server → server gọi Claude Code chạy nền
+function createComposer(el, getData) {
+  const big = el.classList.contains('composer-big');
+  el.innerHTML = `
+    ${big ? `<div class="mention-row">${AGENTS.map((a) => `<button type="button" class="mention" data-id="${a.id}" style="--c:${a.color}">${a.id === 'kuma' ? '🐻' : ''}${esc(a.name)}</button>`).join('')}</div>` : ''}
+    <form class="comp-form">
+      <textarea rows="${big ? 2 : 1}" placeholder="Giao việc… vd: Ink ơi, viết 5 headline cho brief Autumn Café"></textarea>
+      <button type="submit" class="send" title="Gửi (Enter)">Gửi</button>
+    </form>
+    <div class="comp-status"><span class="cs-text"></span><button type="button" class="cs-new" hidden>Phiên mới</button></div>`;
+  const ta = el.querySelector('textarea');
+  const form = el.querySelector('form');
+  const btn = el.querySelector('.send');
+  const st = el.querySelector('.cs-text');
+  const newBtn = el.querySelector('.cs-new');
+  let sending = false;
+  let flashMsg = '', flashUntil = 0;
+
+  el.querySelectorAll('.mention').forEach((b) => b.addEventListener('click', () => {
+    const a = PEOPLE[b.dataset.id];
+    const prefix = `${a.name} ơi, `;
+    if (!ta.value.startsWith(prefix)) ta.value = prefix + ta.value.replace(/^\S+ ơi, /, '');
+    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  }));
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+  });
+  ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = ta.value.trim();
+    if (!text || sending || MODE !== 'live') return;
+    sending = true; btn.disabled = true;
+    try {
+      const r = await fetch('./api/order', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio': '1' }, body: JSON.stringify({ text }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+      ta.value = ''; ta.style.height = '';
+      flash(j.queue > 0 ? `Đã xếp hàng · còn ${j.queue} lệnh phía trước` : 'Đã gửi · Claude đang nhận việc…');
+    } catch (err) {
+      flash(`Gửi không được (${err.message}). Server còn mở không?`);
+    } finally { sending = false; btn.disabled = false; }
+  });
+
+  newBtn.addEventListener('click', async () => {
+    try { await fetch('./api/session/new', { method: 'POST', headers: { 'X-Studio': '1' } }); flash('Đã mở phiên mới'); } catch {}
+  });
+
+  function flash(m) { flashMsg = m; flashUntil = Date.now() + 4000; refresh(); }
+
+  function elapsed(iso) {
+    const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function refresh() {
+    const d = getData();
+    const live = MODE === 'live';
+    const run = d?.runner;
+    ta.disabled = !live;
+    btn.disabled = !live || sending;
+    ta.placeholder = live ? 'Giao việc… vd: Ink ơi, viết 5 headline cho brief Autumn Café' : MODE === 'demo' ? 'Bản demo — không gửi lệnh được. Chạy start-studio.bat để dùng thật.' : 'Đang chờ server…';
+    el.dataset.state = '';
+    newBtn.hidden = !(live && run?.available && run?.session && !run?.busy);
+    if (flashMsg && Date.now() < flashUntil) { st.textContent = flashMsg; return; }
+    if (!live) { st.textContent = ''; return; }
+    if (!run) { st.textContent = 'Server cũ — tắt và mở lại start-studio.bat để bật ô lệnh.'; el.dataset.state = 'warn'; return; }
+    if (!run.available) { st.innerHTML = 'Chưa tìm thấy Claude Code trên máy. Cài: <code>irm https://claude.ai/install.ps1 | iex</code> rồi mở lại start-studio.bat'; el.dataset.state = 'warn'; return; }
+    if (run.busy) {
+      el.dataset.state = 'busy';
+      st.innerHTML = `<i class="dot"></i> Claude đang xử lý <span class="cs-time" data-start="${esc(run.startedAt)}">${elapsed(run.startedAt)}</span>${run.queue ? ` · ${run.queue} lệnh đang chờ` : ''} — “${esc(run.currentText.slice(0, 60))}${run.currentText.length > 60 ? '…' : ''}”`;
+      return;
+    }
+    st.textContent = run.session ? 'Sẵn sàng · đang tiếp tục phiên trước (Claude nhớ ngữ cảnh)' : 'Sẵn sàng nhận lệnh · Enter để gửi, Shift+Enter xuống dòng';
+  }
+
+  return {
+    refresh,
+    tickClock() { const t = el.querySelector('.cs-time'); if (t) t.textContent = elapsed(t.dataset.start); },
+  };
 }
 
 // Markdown tối giản cho báo cáo của Kuma

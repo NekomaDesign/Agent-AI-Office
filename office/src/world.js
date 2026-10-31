@@ -202,7 +202,7 @@ export function createWorld(container, { onSelect, onOpenChat }) {
       for (const a of AGENTS) stations[a.id].setStatus(data.agents[a.id]);
       const anyWorking = AGENTS.some((a) => data.agents[a.id].state === 'working');
       const waiting = AGENTS.filter((a) => data.agents[a.id].state === 'waiting_review').length;
-      stations.cd.setStatus({ state: waiting ? 'waiting_review' : anyWorking ? 'working' : 'idle', cd: true, waiting });
+      stations.cd.setStatus({ state: waiting ? 'waiting_review' : (anyWorking || data.runner?.busy) ? 'working' : 'idle', cd: true, waiting });
       board.setData(data);
       const total = Object.values(data.chats).reduce((n, c) => n + c.length, 0);
       loungeTag.querySelector('.zt-count').textContent = `${total} tin`;

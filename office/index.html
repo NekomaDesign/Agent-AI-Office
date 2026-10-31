@@ -41,10 +41,20 @@
           <span class="mini-more" id="mini-more">CHI TIẾT →</span>
         </button>
         <ol class="mini-list" id="mini-list"></ol>
+        <div class="composer composer-mini" data-composer></div>
       </section>
 
       <section class="overlay" id="view-board" hidden></section>
-      <section class="overlay" id="view-chat" hidden></section>
+      <section class="overlay" id="view-chat" hidden>
+        <div class="ov-head"><div><div class="ov-eyebrow" id="chat-eyebrow">PHÒNG HỘI THOẠI</div><h2>Team đang trao đổi</h2></div></div>
+        <div class="chat-layout">
+          <div class="thread-list" id="thread-list"></div>
+          <div class="chat-col">
+            <div class="msgs" id="msgs"></div>
+            <div class="composer composer-big" data-composer></div>
+          </div>
+        </div>
+      </section>
       <section class="overlay" id="view-kuma" hidden></section>
 
       <div id="toasts" aria-live="polite"></div>

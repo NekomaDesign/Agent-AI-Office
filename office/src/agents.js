@@ -45,7 +45,10 @@ export const CD = {
   desc: 'Người ra quyết định. Agent chỉ bắt tay vào việc khi anh Nekoma giao trực tiếp.',
 };
 
-export const PEOPLE = Object.fromEntries([...AGENTS, CD].map((a) => [a.id, a]));
+// Claude Code chạy nền — nhận lệnh anh gõ trên web rồi chuyển cho đúng agent
+export const STUDIO_BOT = { id: 'studio', name: 'Điều phối', role: 'Claude Code', color: '#3b3a36', bot: true };
+
+export const PEOPLE = Object.fromEntries([...AGENTS, CD, STUDIO_BOT].map((a) => [a.id, a]));
 
 export const STATES = {
   idle:           { label: 'RẢNH',       short: 'Rảnh',       color: '#9b958b', icon: '○' },

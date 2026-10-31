@@ -8,7 +8,9 @@
       "Edit(./outputs/**)",
       "Bash(date:*)",
       "Bash(mkdir:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebSearch",
+      "WebFetch"
     ]
   }
 }
