@@ -25,6 +25,7 @@ async function boot() {
     send: (channel, text) => source.send(channel, text),
     order: (text) => source.order(text),
     newSession: () => source.newSession(),
+    openFolder: (p) => source.openFolder(p),
   });
   ui.select('cd', false);
 

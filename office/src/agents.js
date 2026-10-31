@@ -70,7 +70,8 @@ export const PEOPLE = Object.fromEntries([...AGENTS, CD, STUDIO_BOT].map((a) => 
 export const STATES = {
   idle:           { label: 'RẢNH',       short: 'Rảnh',       color: '#9b958b', icon: '○' },
   working:        { label: 'ĐANG LÀM',   short: 'Đang làm',   color: '#f0a81c', icon: '●' },
-  waiting_review: { label: 'CHỜ DUYỆT',  short: 'Chờ duyệt',  color: '#ec6a24', icon: '◐' },
+  manager_review: { label: 'GRID DUYỆT', short: 'Chờ Grid duyệt', color: '#14a3a0', icon: '◑' },
+  waiting_review: { label: 'CHỜ ANH DUYỆT', short: 'Chờ anh duyệt', color: '#ec6a24', icon: '◐' },
   blocked:        { label: 'CẦN HỖ TRỢ', short: 'Cần hỗ trợ', color: '#d93a2b', icon: '!' },
   done:           { label: 'ĐÃ XONG',    short: 'Đã xong',    color: '#2f9a5c', icon: '✓' },
 };

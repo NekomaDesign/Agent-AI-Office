@@ -31,7 +31,21 @@ Khu E · Quảng trường chat là kênh chat chung của cả công ty.
    việc cho `lue` ngoài CD.
 4. Nếu thiếu thông tin hoặc bị chặn (không tải được file, thiếu asset…) → chuyển trạng thái
    `blocked`, nhắn CD nói rõ cần gì, rồi dừng.
-5. Chỉ CD được chuyển việc sang `done`.
+5. **Mọi việc của nhân viên phải qua Grid duyệt trước** (xem LUỒNG DUYỆT). Anh Nekoma chỉ nhận
+   **bản cuối** và chỉ anh được duyệt bản cuối sang `done`.
+
+## LUỒNG DUYỆT (nhân viên → Grid → anh Nekoma)
+
+1. Brief / Ink / Pixel / Cube / Frame làm xong → state `manager_review` (progress 100), nhắn **Grid**
+   (`"to":"manager"`), kèm `"files"` là các file kết quả. KHÔNG gửi thẳng cho anh duyệt.
+2. Phiên chính gọi `manager` để duyệt. Chưa đạt → Grid ghi rõ cần sửa gì, việc về `working` và
+   giao lại đúng người. Đạt → việc con sang `done` (Grid duyệt).
+3. Grid gửi anh **bản cuối**: task cha (hoặc việc anh giao thẳng một bạn) → `waiting_review`, Grid nhắn
+   anh trong chat của task kèm `"files"` các file chính và `outputs/<taskId>/summary.md`.
+4. Anh duyệt bản cuối → task cha + mọi task con → `done`.
+5. Anh **góp ý** → luôn gửi cho Grid. Grid chuyển góp ý cho đúng người (ghi vào chat của task con),
+   bạn đó sửa → lại `manager_review` → Grid duyệt → gửi anh bản cuối mới.
+6. Ngoại lệ: việc của **Lue** (trợ lý riêng) và việc Grid tự làm thì gửi thẳng anh (`waiting_review`).
 
 ## QUY TRÌNH MANAGER (khi CD giao việc cho Grid)
 
@@ -41,11 +55,13 @@ Subagent không gọi được subagent khác, nên **phiên Claude Code chính*
    các task con (`assignedBy: "manager"`, `parent: "<taskId>"`), rồi nhắn giao việc trong chat.
 2. Đọc `assignments.md`, gọi **đúng subagent** cho từng task con. Truyền nguyên lời Grid giao, kèm
    `subTaskId` và câu "Grid (Manager) giao việc này". Task con độc lập thì gọi song song; task
-   phụ thuộc thì chờ task trước lên `waiting_review` rồi mới gọi.
-3. Khi mọi task con đã `waiting_review` (hoặc `blocked`) → gọi lại `manager` (Bước 2) để kiểm tra
-   và tổng hợp. Grid yêu cầu sửa → giao lại đúng người, rồi gọi Grid kiểm tra lần nữa.
-4. Grid đưa task cha lên `waiting_review` và báo CD. CD duyệt task cha → chuyển task cha và các
-   task con của nó sang `done`.
+   phụ thuộc thì chờ task trước lên `manager_review` rồi mới gọi.
+3. Khi mọi task con đã `manager_review` (hoặc `blocked`) → gọi lại `manager` (Bước 2) để duyệt
+   và tổng hợp. Grid yêu cầu sửa → giao lại đúng người, rồi gọi Grid duyệt lần nữa.
+4. Grid đưa task cha lên `waiting_review` và gửi anh bản cuối. Anh duyệt → task cha và các task
+   con sang `done`. Anh góp ý → làm theo bước 5 của LUỒNG DUYỆT.
+5. Anh giao thẳng việc cho một bạn (không qua Grid) → bạn đó làm xong vẫn lên `manager_review`,
+   phiên chính gọi `manager` duyệt rồi Grid mới gửi anh bản cuối.
 
 ## GIAO THỨC STUDIO (bắt buộc ở MỌI bước)
 
@@ -72,13 +88,14 @@ văn phòng sẽ không thấy agent làm việc.
 |------------------|--------------------------------|--------------------|
 | `idle`           | Rảnh, chờ lệnh (mặc định)      | RẢNH               |
 | `working`        | Đang làm                       | ĐANG LÀM (vàng)    |
-| `waiting_review` | Xong, chờ CD duyệt             | CHỜ DUYỆT (cam)    |
+| `manager_review` | Nhân viên xong, chờ Grid duyệt | GRID DUYỆT (xanh ngọc) |
+| `waiting_review` | Bản cuối, chờ CD duyệt         | CHỜ ANH DUYỆT (cam) |
 | `blocked`        | Bị chặn, cần CD hỗ trợ         | CẦN HỖ TRỢ (đỏ)     |
-| `done`           | CD đã duyệt                    | ĐÃ XONG (xanh lá)  |
+| `done`           | Đã duyệt (Grid với việc con, CD với bản cuối) | ĐÃ XONG (xanh lá) |
 
 Ghi status khi: nhận việc (`working`, progress 0–10) → mỗi bước lớn (cập nhật progress + note)
-→ xong (`waiting_review`, progress 100). Khi CD nói "duyệt"/"ok" → `done`. Khi CD cho nghỉ
-hoặc bắt đầu việc mới → về `idle`.
+→ xong (`manager_review`, progress 100 — riêng Lue và Grid dùng `waiting_review`). Duyệt theo
+LUỒNG DUYỆT. Khi CD cho nghỉ hoặc bắt đầu việc mới → về `idle`.
 
 ### 2. Hội thoại — THÊM 1 dòng JSON vào `.studio/chat/<taskId>.jsonl`
 
@@ -89,11 +106,16 @@ hoặc bắt đầu việc mới → về `idle`.
 - Mỗi dòng là 1 object JSON hoàn chỉnh, KHÔNG sửa/xoá dòng cũ, chỉ nối thêm vào cuối.
 - Ghi cả lời CD giao việc (`"from":"cd"`) lẫn lời agent trả lời.
 - Ngắn gọn, thân thiện, tiếng Việt, như nhắn tin trong team.
+- **Gửi file:** thêm `"files": ["outputs/<taskId>/poster.png", ...]`. Văn phòng hiện thẳng ảnh,
+  video, SVG, HTML, Markdown ngay trong chat, kèm nút tải file gốc, tải cả bộ .zip và mở thư mục.
+  Ghi đường dẫn bắt đầu bằng `outputs/`. Ghi cả thư mục (`outputs/<taskId>/`) nếu muốn gửi cả bộ.
 
-### 2b. Chat chung công ty — `.studio/chat/company.jsonl`
+### 2b. Kênh # all — `.studio/chat/company.jsonl`
 
-Kênh nhóm của cả công ty. Văn phòng 3D có tab **Chat công ty**, CD gõ tin trực tiếp ở đó.
+Kênh nhóm của cả công ty (tab **Chat công ty** → `# all`), CD gõ tin trực tiếp ở đó.
 - `"to":"team"` khi nói với cả nhóm; `"to":"<id>"` khi nhắc riêng một người.
+- CD tag `@<tên>` hoặc `@all` → server tự gọi Claude Code chạy nền để người được tag trả lời ngay
+  trong kênh (`@all`: Grid trả lời thay mặt team). Tin không tag thì chỉ ghi lại.
 - Grid đăng tin phân công ở đây. Agent đăng 1 tin ngắn khi **xong** việc lớn hoặc **bị chặn**.
 - Khi CD nói "xem chat chung" / "trả lời chat": đọc các tin mới của CD trong file này. Tin có
   `@<tên>` là lời giao việc cho người đó (áp dụng QUY TẮC VÀNG như khi CD gọi tên trực tiếp).
