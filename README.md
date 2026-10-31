@@ -34,6 +34,17 @@ Trình duyệt tự mở `http://localhost:5173`. Giữ cửa sổ server mở t
 
 ## Giao việc cho agent
 
+### Cách 1 — gõ ngay trên web (khuyên dùng)
+
+Gõ vào ô **Giao việc…** ở góc dưới trái văn phòng, hoặc kênh **⚡ Giao việc** trong tab **Chat công ty**, rồi bấm Enter.
+Server trên máy sẽ gọi Claude Code chạy nền để chuyển việc cho đúng người. Gõ `Grid ơi, lo trọn gói…` để Grid tự chia việc, hoặc bấm tên agent phía trên ô chat để chèn nhanh "Ink ơi, …".
+
+- Lệnh xếp hàng lần lượt. Claude nhớ ngữ cảnh các lệnh trước, bấm **Phiên mới** để bắt đầu lại.
+- Ở chế độ này agent được tự ghi file trong dự án, được đọc web và chạy lệnh `date`/`mkdir`/`ls`. Các lệnh hệ thống khác bị chặn.
+- Cần đăng nhập Claude Code ít nhất một lần (gõ `claude` trong PowerShell).
+
+### Cách 2 — trong Claude Code
+
 Mở một cửa sổ PowerShell **khác**:
 
 ```powershell
@@ -61,9 +72,9 @@ Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 g
 
 ### Chat công ty
 
-Tab **Chat công ty** giống Slack: kênh `# chung` cho cả công ty, mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
-Anh gõ tin ngay trong văn phòng (Enter để gửi, `@Grid`, `@Ink`… để gọi tên). Tin được lưu vào `.studio/chat/company.jsonl`.
-Agent không tự đọc tin, nên sau khi nhắn, anh nói trong Claude Code: `xem chat chung và trả lời giúp anh`.
+Tab **Chat công ty** giống Slack: kênh `# chung` cho cả công ty, kênh **⚡ Giao việc** (Claude chạy thật), mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
+Ở `# chung` anh nhắn như nhóm chat (Enter để gửi, `@Grid`, `@Ink`… để gọi tên), tin lưu vào `.studio/chat/company.jsonl` và **chỉ được ghi lại**.
+Muốn agent làm việc thật thì gõ ở kênh **⚡ Giao việc**.
 Sản phẩm nằm trong `outputs/<tên-task>/`. Khi anh nói "duyệt" hoặc "ok", agent chuyển sang **ĐÃ XONG**.
 
 ## Cấu trúc

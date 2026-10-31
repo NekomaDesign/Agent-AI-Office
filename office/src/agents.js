@@ -62,7 +62,10 @@ export const CD = {
 
 for (const p of [...AGENTS, CD]) p.zoneName = ZONES[p.zone].name;
 
-export const PEOPLE = Object.fromEntries([...AGENTS, CD].map((a) => [a.id, a]));
+// Claude Code chạy nền — nhận lệnh anh gõ ở kênh ⚡ Giao việc rồi chuyển cho đúng agent
+export const STUDIO_BOT = { id: 'studio', name: 'Claude', role: 'Chạy lệnh nền', color: '#3b3a36', bot: true, emoji: '✦' };
+
+export const PEOPLE = Object.fromEntries([...AGENTS, CD, STUDIO_BOT].map((a) => [a.id, a]));
 
 export const STATES = {
   idle:           { label: 'RẢNH',       short: 'Rảnh',       color: '#9b958b', icon: '○' },
@@ -76,3 +79,5 @@ export const stateOf = (s) => (STATES[s] ? s : 'idle');
 
 // Kênh chat chung toàn công ty (file .studio/chat/company.jsonl)
 export const COMPANY = 'company';
+// Kênh ra lệnh: tin gửi ở đây được Claude Code chạy thật (file .studio/chat/dieu-phoi.jsonl)
+export const ORDERS = 'dieu-phoi';

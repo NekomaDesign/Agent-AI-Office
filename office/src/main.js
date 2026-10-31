@@ -20,7 +20,12 @@ async function boot() {
     onSelect: (id) => ui.select(id),
     onOpenChat: () => ui.setView('chat'),
   });
-  ui = createUI({ world, send: (channel, text) => source.send(channel, text) });
+  ui = createUI({
+    world,
+    send: (channel, text) => source.send(channel, text),
+    order: (text) => source.order(text),
+    newSession: () => source.newSession(),
+  });
   ui.select('cd', false);
 
   source = startSource((data) => ui.update(data), (mode) => ui.setMode(mode));

@@ -31,13 +31,14 @@ export function normalize(raw = {}) {
     tasks,
     chats,
     reports: Array.isArray(raw.reports) ? raw.reports : [],
+    runner: raw.runner || null,
   };
 }
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- LIVE / DEMO ----------
-// Trả về { send(channel, text) } để anh Nekoma nhắn từ văn phòng.
+// Trả về { send, order, newSession } để anh Nekoma nhắn / giao việc từ văn phòng.
 export function startSource(onData, onMode) {
   const forceDemo = new URLSearchParams(location.search).has('demo');
   let mode = forceDemo ? 'demo' : 'connecting';
@@ -73,13 +74,21 @@ export function startSource(onData, onMode) {
       onData(normalize(demo.snapshot()));
       return { ok: true };
     }
-    const r = await fetch('./api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, text }),
-    });
+    return post('./api/chat', { channel, text });
+  }
+
+  // Giao việc thật: server gọi Claude Code chạy nền (chỉ có ở chế độ LIVE)
+  async function order(text) {
+    if (mode !== 'live') throw new Error('chỉ giao việc được khi chạy start-studio.bat trên máy');
+    return post('./api/order', { text });
+  }
+  const newSession = () => post('./api/session/new', {});
+
+  async function post(url, body) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio': '1' }, body: JSON.stringify(body) });
     const res = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(res.error || `Lỗi ${r.status}`);
+    if (r.status === 404 || r.status === 405) throw new Error('server cũ — tắt và mở lại start-studio.bat');
+    if (!r.ok || res.ok === false) throw new Error(res.error || `lỗi ${r.status}`);
     await pollLive();
     return res;
   }
@@ -94,7 +103,7 @@ export function startSource(onData, onMode) {
       }, 3000);
     });
   }
-  return { send };
+  return { send, order, newSession };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------

@@ -250,7 +250,7 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
       for (const a of AGENTS) stations[a.id].setStatus(A[a.id]);
       const anyWorking = AGENTS.some((a) => A[a.id].state === 'working');
       const waiting = AGENTS.filter((a) => A[a.id].state === 'waiting_review').length;
-      stations.cd.setStatus({ state: waiting ? 'waiting_review' : anyWorking ? 'working' : 'idle', cd: true, waiting });
+      stations.cd.setStatus({ state: waiting ? 'waiting_review' : (anyWorking || data.runner?.busy) ? 'working' : 'idle', cd: true, waiting });
       board.setData(data);
       const company = data.chats[COMPANY] || [];
       chatWall.setData(company);
@@ -1081,10 +1081,10 @@ function buildStation(person, cfg, world, onSelect) {
   // Vòng trạng thái dưới ghế
   const ringMat = new THREE.MeshBasicMaterial({ color: '#999', transparent: true, opacity: 0.0, toneMapped: false, depthWrite: false });
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 0.98, 6), ringMat);
-  ring.rotation.x = -Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.set(0, 0.015, -0.2);
+  ring.rotation.x = -Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.set(0, 0.055, -0.2);
   const discMat = new THREE.MeshBasicMaterial({ color: '#999', transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
   const disc = new THREE.Mesh(new THREE.CircleGeometry(0.82, 6), discMat);
-  disc.rotation.copy(ring.rotation); disc.position.copy(ring.position); disc.position.y = 0.012;
+  disc.rotation.copy(ring.rotation); disc.position.copy(ring.position); disc.position.y = 0.05;
   root.add(disc, ring);
 
   // Nhân vật
@@ -1107,7 +1107,7 @@ function buildStation(person, cfg, world, onSelect) {
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   const bubbleObj = new CSS2DObject(bubble);
-  bubbleObj.position.set(0, 3.0, -0.2);
+  bubbleObj.position.set(0, 3.45, -0.2);
   root.add(bubbleObj);
   let bubbleTimer = null;
 

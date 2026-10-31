@@ -1,5 +1,5 @@
 // Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Lue, toast.
-import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY } from './agents.js';
+import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY, ORDERS } from './agents.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,10 +17,10 @@ export function timeAgo(iso) {
 }
 const hhmm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }); };
 
-const face = (id) => { const p = PEOPLE[id]; return p ? (p.hair === 'duck' ? p.emoji : esc(p.name[0])) : esc((id || '?')[0]); };
+const face = (id) => { const p = PEOPLE[id]; return p ? (p.hair === 'duck' || p.bot ? p.emoji : esc(p.name[0])) : esc((id || '?')[0]); };
 function avatar(id, size = '') {
   const p = PEOPLE[id] || { name: id || '?', color: '#888' };
-  return `<span class="avatar ${size} ${p.human ? 'human' : ''}" style="--c:${p.color}">${face(id)}</span>`;
+  return `<span class="avatar ${size} ${p.human ? 'human' : ''} ${p.bot ? 'bot' : ''}" style="--c:${p.color}">${face(id)}</span>`;
 }
 const nameOf = (id) => (id === 'cd' ? `Anh ${CD.name}` : id === 'team' ? 'Cả team' : (PEOPLE[id]?.name || id || '?'));
 const pill = (s) => { const st = STATES[s] || STATES.idle; return `<span class="pill" data-s="${s}" style="--c:${st.color}">${st.label}</span>`; };
@@ -38,7 +38,9 @@ function allMessages(chats) {
 }
 
 // ======================================================================
-export function createUI({ world, send }) {
+const elapsed = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+export function createUI({ world, send, order, newSession }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -86,6 +88,50 @@ export function createUI({ world, send }) {
   }
   function closeProfile() { profileId = null; $('#profile').hidden = true; }
 
+  // ---- giao việc thật (Claude Code chạy nền) ----
+  let flash = null; // { text, err, until }
+  function runnerStatus() {
+    const run = data?.runner;
+    if (mode === 'demo') return { ok: false, text: 'Bản demo — không giao việc thật được. Chạy start-studio.bat để dùng thật.' };
+    if (mode !== 'live') return { ok: false, text: 'Đang chờ server…' };
+    if (!run) return { ok: false, warn: true, text: 'Server cũ — tắt và mở lại start-studio.bat để bật giao việc trên web.' };
+    if (!run.available) return { ok: false, warn: true, html: 'Chưa tìm thấy Claude Code trên máy. Cài: <code>irm https://claude.ai/install.ps1 | iex</code> rồi mở lại start-studio.bat' };
+    if (run.busy) return { ok: true, busy: true, html: `<i class="dot"></i> Claude đang xử lý <span class="cs-time" data-start="${esc(run.startedAt)}">${elapsed(run.startedAt)}</span>${run.queue ? ` · ${run.queue} lệnh đang chờ` : ''} — “${esc(run.currentText.slice(0, 60))}${run.currentText.length > 60 ? '…' : ''}”` };
+    return { ok: true, session: run.session, text: run.session ? 'Sẵn sàng · Claude nhớ ngữ cảnh các lệnh trước' : 'Sẵn sàng nhận việc · Enter để gửi, Shift+Enter xuống dòng' };
+  }
+  function paintStatus(el) {
+    if (!el) return;
+    if (flash && Date.now() < flash.until) { el.className = el.dataset.base + (flash.err ? ' err' : ''); el.textContent = flash.text; return; }
+    const r = runnerStatus();
+    el.className = el.dataset.base + (r.busy ? ' busy' : r.warn ? ' err' : '');
+    if (r.html) el.innerHTML = r.html; else el.textContent = r.text;
+    if (r.ok && r.session && !r.busy && el.id === 'composer-hint') el.insertAdjacentHTML('beforeend', ' <button type="button" class="cs-new" id="cs-new">Phiên mới</button>');
+  }
+  async function giveOrder(text) {
+    const res = await order(text);
+    flash = { text: res.queue > 0 ? `Đã xếp hàng · còn ${res.queue} lệnh phía trước` : 'Đã gửi · Claude đang nhận việc…', until: Date.now() + 4000 };
+  }
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#cs-new')) return;
+    try { await newSession(); flash = { text: 'Đã mở phiên mới', until: Date.now() + 3000 }; } catch (err) { flash = { text: err.message, err: true, until: Date.now() + 4000 }; }
+    paintStatus($('#composer-hint'));
+  });
+  $('#mini-order-status').dataset.base = 'mini-order-status';
+  const miniTa = $('#mini-order-input');
+  miniTa.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#mini-order').requestSubmit(); } });
+  $('#mini-order').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = miniTa.value.trim();
+    if (!text) return;
+    try { await giveOrder(text); miniTa.value = ''; } catch (err) { flash = { text: `Chưa gửi được: ${err.message}`, err: true, until: Date.now() + 5000 }; }
+    renderOrderBox();
+  });
+  function renderOrderBox() {
+    const r = runnerStatus();
+    miniTa.disabled = !r.ok; $('#mini-order button').disabled = !r.ok;
+    paintStatus($('#mini-order-status'));
+  }
+
   // ---- mode ----
   function setMode(m) {
     mode = m;
@@ -99,6 +145,7 @@ export function createUI({ world, send }) {
       offline: '<b>Mất kết nối</b> — cửa sổ server đã tắt? Chạy lại <code>start-studio.bat</code>.',
     }[m];
     if (view === 'chat') renderChat();
+    renderOrderBox();
   }
 
   // ---- data ----
@@ -125,6 +172,7 @@ export function createUI({ world, send }) {
 
     world.update(d);
     render();
+    renderOrderBox();
   }
 
   function toast(a, state, task) {
@@ -281,6 +329,7 @@ export function createUI({ world, send }) {
   // ---------- CHAT CÔNG TY ----------
   function threadTitle(id) {
     if (id === COMPANY) return { project: 'CẢ CÔNG TY', title: 'chung' };
+    if (id === ORDERS) return { project: 'CLAUDE CHẠY THẬT', title: '⚡ Giao việc' };
     const t = data.tasks.find((x) => x.id === id);
     if (t) return { project: t.project || '', title: t.title || id };
     if (id === 'studio-welcome') return { project: 'STUDIO', title: 'Chào mừng' };
@@ -298,7 +347,7 @@ export function createUI({ world, send }) {
           <form class="composer" id="composer">
             <div class="mention-row" id="mention-row"></div>
             <div class="composer-box"><textarea id="composer-input" rows="2" placeholder="Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
-            <small class="composer-hint" id="composer-hint"></small>
+            <small class="composer-hint" id="composer-hint" data-base="composer-hint"></small>
           </form>
         </section>
         <aside class="members" id="members"></aside>
@@ -306,9 +355,15 @@ export function createUI({ world, send }) {
     $('#mention-row').innerHTML = AGENTS.map((a) => `<button type="button" data-n="${esc(a.name)}" style="--c:${a.color}">@${esc(a.name)}</button>`).join('');
     $('#mention-row').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-n]'); if (!b) return;
-      const ta = $('#composer-input'); ta.value = `@${b.dataset.n} ` + ta.value.replace(/^@\S+\s*/, ''); ta.focus();
+      insertName(b.dataset.n);
     });
     const ta = $('#composer-input');
+    // kênh ⚡ Giao việc: chèn "Ink ơi, …"; kênh khác: chèn "@Ink"
+    function insertName(n) {
+      if (channel === ORDERS) ta.value = `${n} ơi, ` + ta.value.replace(/^\S+ ơi, /, '');
+      else ta.value = `@${n} ` + ta.value.replace(/^@\S+\s*/, '');
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#composer').requestSubmit(); } });
     $('#composer').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -318,14 +373,17 @@ export function createUI({ world, send }) {
       const btn = $('#composer-send');
       btn.disabled = true;
       try {
-        await send(channel === 'all' ? COMPANY : channel, text);
+        if (channel === ORDERS) await giveOrder(text);
+        else {
+          await send(channel === 'all' ? COMPANY : channel, text);
+          flash = { text: mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).' : 'Đã gửi · chỉ ghi lại. Muốn agent làm thật thì gửi ở kênh ⚡ Giao việc.', until: Date.now() + 5000 };
+        }
         ta.value = '';
-        hint.className = 'composer-hint';
-        hint.textContent = mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).' : 'Đã gửi · lưu ở .studio/chat/. Gọi tên trong Claude Code để agent đọc & trả lời.';
+        paintStatus(hint);
         scrollMsgs(true);
       } catch (err) {
-        hint.className = 'composer-hint err';
-        hint.textContent = `Chưa gửi được: ${err.message}`;
+        flash = { text: `Chưa gửi được: ${err.message}`, err: true, until: Date.now() + 6000 };
+        paintStatus(hint);
       } finally { btn.disabled = false; }
     });
     $('#ch-list').addEventListener('click', (e) => {
@@ -335,7 +393,7 @@ export function createUI({ world, send }) {
     $('#members').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]'); if (!b) return;
       if (b.dataset.id === 'cd') return;
-      const ta2 = $('#composer-input'); ta2.value = `@${PEOPLE[b.dataset.id].name} `; ta2.focus();
+      insertName(PEOPLE[b.dataset.id].name);
     });
   }
 
@@ -347,16 +405,17 @@ export function createUI({ world, send }) {
   function renderChat() {
     if (!data) return;
     if (!$('#composer')) buildChatShell();
-    const threads = Object.entries(data.chats).filter(([id, l]) => l.length && id !== COMPANY)
+    const threads = Object.entries(data.chats).filter(([id, l]) => l.length && id !== COMPANY && id !== ORDERS)
       .sort((a, b) => String(b[1].at(-1).time).localeCompare(String(a[1].at(-1).time)));
     const company = data.chats[COMPANY] || [];
     const total = Object.values(data.chats).reduce((n, l) => n + l.length, 0);
-    if (channel !== 'all' && channel !== COMPANY && !data.chats[channel]) channel = COMPANY;
+    if (channel !== 'all' && channel !== COMPANY && channel !== ORDERS && !data.chats[channel]) channel = COMPANY;
     $('#chat-eyebrow').textContent = `${data.studio.name} · KHU E · ${ZONES.E.name.toUpperCase()}`;
 
     const chBtn = (id, label, sub, n) => `<button class="channel ${channel === id ? 'active' : ''}" data-t="${esc(id)}"><b>${label}</b><small>${esc(sub)}</small>${n ? `<span class="n">${n}</span>` : ''}</button>`;
     $('#ch-list').innerHTML = `<div class="ch-title">KÊNH</div>` +
       chBtn(COMPANY, '# chung', 'Cả công ty', company.length) +
+      chBtn(ORDERS, '⚡ Giao việc', 'Claude Code làm thật', (data.chats[ORDERS] || []).length) +
       chBtn('all', '◎ Tất cả hoạt động', 'Mọi kênh gộp lại', total) +
       `<div class="ch-title">VIỆC (${threads.length})</div>` +
       threads.map(([id, l]) => { const tt = threadTitle(id); return chBtn(id, `# ${esc(tt.title)}`, tt.project, l.length); }).join('');
@@ -368,7 +427,9 @@ export function createUI({ world, send }) {
     const tt = threadTitle(channel === 'all' ? COMPANY : channel);
     $('#room-head').innerHTML = channel === 'all'
       ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # chung</small>`
-      : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Lue và cả team' : esc(tt.project)}</small>`;
+      : channel === ORDERS
+        ? `<b>⚡ Giao việc</b><small>Gõ ở đây là Claude Code trên máy chạy thật: gọi "Grid ơi…" để giao trọn gói, hoặc gọi thẳng tên từng bạn</small>`
+        : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Lue và cả team · tin ở đây chỉ ghi lại' : esc(tt.project)}</small>`;
 
     let lastDay = '', lastFrom = '';
     const html = list.length ? list.map((m) => {
@@ -383,7 +444,9 @@ export function createUI({ world, send }) {
       return sep + `<div class="smsg ${cont ? 'cont' : ''}${toMe}">${cont ? '<span class="avatar-gap"></span>' : avatar(m.from)}<div class="smsg-body">
         ${cont ? '' : `<div class="smeta"><b style="--c:${p.color}">${esc(nameOf(m.from))}</b><span class="role">${esc(p.role || '')}</span><time>${hhmm(m.time)}</time>${m.to && m.to !== 'team' ? `<span class="to">→ ${esc(nameOf(m.to))}</span>` : ''}${where}</div>`}
         <div class="stext">${richText(m.text)}</div></div></div>`;
-    }).join('') : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Tin có <code>@Grid</code> là giao việc cho Grid.</div>`;
+    }).join('') : channel === ORDERS
+      ? `<div class="empty"><b>Chưa có lệnh nào</b>Gõ ví dụ <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code> — Claude sẽ chuyển việc cho đúng người.</div>`
+      : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Muốn agent làm việc thật thì dùng kênh <b>⚡ Giao việc</b>.</div>`;
     const box = $('#msgs');
     const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     box.dataset.stick = atBottom ? '1' : '0';
@@ -391,12 +454,19 @@ export function createUI({ world, send }) {
     box.innerHTML = html;
     if (atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = prevTop;
 
-    const canSend = mode === 'live' || mode === 'demo';
+    const isOrder = channel === ORDERS;
+    const canSend = isOrder ? runnerStatus().ok : mode === 'live' || mode === 'demo';
     $('#composer-input').disabled = !canSend;
     $('#composer-send').disabled = !canSend;
-    $('#composer-input').placeholder = canSend
-      ? (channel === COMPANY || channel === 'all' ? 'Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên' : `Nhắn trong # ${tt.title}…`)
-      : 'Chưa kết nối server — chạy start-studio.bat để nhắn';
+    $('#composer-send').textContent = isOrder ? 'Giao việc ↵' : 'Gửi ↵';
+    $('#composer').classList.toggle('order', isOrder);
+    $('#mention-row').querySelectorAll('button').forEach((b) => (b.textContent = isOrder ? `${b.dataset.n} ơi` : `@${b.dataset.n}`));
+    $('#composer-input').placeholder = !canSend
+      ? (isOrder ? runnerStatus().text || 'Chưa giao việc được' : 'Chưa kết nối server — chạy start-studio.bat để nhắn')
+      : isOrder ? 'Giao việc… vd: Grid ơi, lo trọn gói brief Autumn Café giúp anh'
+      : channel === COMPANY || channel === 'all' ? 'Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên' : `Nhắn trong # ${tt.title}…`;
+    if (isOrder || (flash && Date.now() < flash.until)) paintStatus($('#composer-hint'));
+    else { const h = $('#composer-hint'); h.className = 'composer-hint'; h.textContent = ''; }
 
     const mem = (p) => {
       const s = p.human ? null : data.agents[p.id];
@@ -424,6 +494,7 @@ export function createUI({ world, send }) {
   setInterval(() => {
     const t = lastUpdate ? lastUpdate.toLocaleTimeString('vi-VN', { hour12: false }) : '--:--:--';
     $('#clock-chip').textContent = `CẬP NHẬT LÚC ${t}`;
+    document.querySelectorAll('.cs-time').forEach((el) => (el.textContent = elapsed(el.dataset.start)));
   }, 500);
   // làm mới "x phút trước"
   setInterval(() => { if (data) renderMini(); }, 15000);

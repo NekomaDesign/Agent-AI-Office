@@ -49,7 +49,7 @@ Subagent không gọi được subagent khác, nên **phiên Claude Code chính*
 
 ## GIAO THỨC STUDIO (bắt buộc ở MỌI bước)
 
-Văn phòng 3D (`node office/server.mjs`) đọc các file trong `.studio/` mỗi 3 giây. Nếu không ghi file,
+Văn phòng 3D (`start-studio.bat`) đọc các file trong `.studio/` mỗi 3 giây. Nếu không ghi file,
 văn phòng sẽ không thấy agent làm việc.
 
 ### 1. Trạng thái — ghi đè `.studio/status/<id>.json`
@@ -128,6 +128,17 @@ nói file nào là gì.
 ### Thời gian
 
 Dùng giờ Việt Nam (+07:00), định dạng ISO 8601. Lấy giờ bằng lệnh hệ thống, không đoán.
+
+## Lệnh gửi từ văn phòng 3D
+
+Anh Nekoma có thể gõ lệnh ngay trong văn phòng: kênh **⚡ Giao việc** trong Chat công ty, hoặc ô
+"Giao việc…" ở góc dưới trái. Khi đó Claude Code chạy ở chế độ nền (`claude -p`), lời anh đã được
+ghi sẵn vào `.studio/chat/dieu-phoi.jsonl`.
+- Không hỏi lại giữa chừng được → thiếu thông tin thì để agent liên quan `blocked` và nhắn anh.
+- Lệnh gọi Grid ("Grid ơi, lo trọn gói…") vẫn chạy đúng **QUY TRÌNH MANAGER** ở trên.
+- Vẫn ghi status/chat/tasks theo giao thức như bình thường (kể cả lời giao việc của anh vào chat của task).
+- Câu trả lời cuối cùng ngắn gọn 1–3 câu: ai nhận việc gì, kết quả ở đâu.
+- Tin anh gõ ở `# chung` hay kênh việc chỉ được ghi lại, không tự chạy. Chỉ đọc khi anh bảo "xem chat chung".
 
 ## Cấu trúc thư mục
 

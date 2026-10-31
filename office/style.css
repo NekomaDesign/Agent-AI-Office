@@ -355,3 +355,22 @@ button.person:hover { text-decoration: underline; }
   .channels .ch-title { display: none; }
   .channel { min-width: 150px; }
 }
+
+/* ======================================================================
+   Giao việc thật (Claude Code chạy nền) — kênh ⚡ Giao việc + ô giao việc nhanh
+   ====================================================================== */
+.mini-order { display: flex; gap: 6px; align-items: flex-end; margin: 0 10px; padding: 6px 6px 6px 10px; background: #fff; border: 1px solid var(--ink); border-radius: 12px; }
+.mini-order textarea { flex: 1; border: 0; outline: 0; resize: none; font: 500 13px/1.45 var(--font); background: transparent; color: var(--ink); padding: 5px 0; min-height: 30px; max-height: 90px; }
+.mini-order textarea:disabled { color: var(--ink-3); }
+.mini-order button { border: 0; background: var(--ink); color: #f2c230; border-radius: 8px; padding: 7px 12px; font: 700 12px var(--font); }
+.mini-order button:disabled { background: #d8d1c6; color: #fff; cursor: default; }
+.mini-order-status { display: block; padding: 5px 14px 10px; font: 500 11px/1.4 var(--mono); color: var(--ink-3); min-height: 14px; }
+.mini-order-status.busy, .composer-hint.busy { color: #8a5d00; }
+.mini-order-status.err { color: #b3261e; }
+.mini-order-status code, .composer-hint code { font-size: 11px; background: var(--paper-2); padding: 1px 5px; border-radius: 4px; }
+.mini-chat.collapsed .mini-order, .mini-chat.collapsed .mini-order-status { display: none; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f0a81c; margin-right: 4px; animation: blink 1s infinite; }
+.cs-new { border: 1px solid var(--line); background: var(--paper-2); border-radius: 6px; padding: 2px 8px; font: 600 11px var(--mono); margin-left: 6px; }
+.composer.order .composer-box { border-color: var(--ink); background: #fffaf0; }
+.composer.order button[type="submit"] { background: var(--ink); color: #f2c230; }
+.avatar.bot { background: var(--paper-2); color: var(--ink); border: 1px dashed var(--ink-3); }
