@@ -2,6 +2,8 @@
 // Server nhỏ cho văn phòng 3D — không cần cài thư viện, chỉ cần Node.js.
 // - Phục vụ giao diện trong thư mục office/
 // - GET /api/state: đọc toàn bộ .studio/ (status, tasks, chat, reports) cho văn phòng hiển thị
+// - POST /api/chat: anh Nekoma nhắn vào chat chung (hoặc 1 kênh việc) — chỉ ghi lại, không chạy lệnh
+// - POST /api/order: anh Nekoma giao việc từ web → Claude Code chạy nền
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import fss from 'node:fs';
@@ -13,7 +15,8 @@ import os from 'node:os';
 const WEB = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(WEB, '..');
 const STUDIO = path.join(ROOT, '.studio');
-const AGENTS = ['brief', 'pixel', 'cube', 'frame', 'ink', 'kuma'];
+const AGENTS = ['manager', 'lue', 'brief', 'ink', 'pixel', 'cube', 'frame'];
+const COMPANY = 'company';
 const START_PORT = Number(process.env.PORT) || 5173;
 
 const MIME = {
@@ -37,10 +40,12 @@ async function ensureStudio() {
   for (const a of AGENTS) {
     await write(path.join(STUDIO, 'status', `${a}.json`), JSON.stringify({ agent: a, state: 'idle', task: '', taskId: '', progress: 0, note: 'Chờ anh giao việc', updated: nowIso() }, null, 2) + '\n');
   }
+  await write(path.join(STUDIO, 'chat', `${COMPANY}.jsonl`),
+    JSON.stringify({ from: 'manager', to: 'team', text: 'Chào cả nhà, em là Grid — Manager của studio 🧭 Việc lớn anh Nekoma giao cho em, em sẽ chia lại cho từng bạn. Đây là kênh chat chung của cả công ty nha.', time: nowIso() }) + '\n');
   const chats = (await fs.readdir(path.join(STUDIO, 'chat'))).filter((f) => f.endsWith('.jsonl'));
   if (!chats.length) {
     await fs.writeFile(path.join(STUDIO, 'chat', 'studio-welcome.jsonl'),
-      JSON.stringify({ from: 'kuma', to: 'cd', text: 'Chào anh Nekoma! Studio đã mở cửa 🐻 Cả team đang rảnh, anh giao việc cho ai thì người đó mới bắt tay vào làm nha.', time: nowIso() }) + '\n', 'utf8');
+      JSON.stringify({ from: 'lue', to: 'cd', text: 'Chào anh Nekoma! Studio đã mở cửa 🦆 Cả team đang rảnh, anh giao việc cho ai thì người đó mới bắt tay vào làm nha.', time: nowIso() }) + '\n', 'utf8');
   }
 }
 
@@ -235,6 +240,24 @@ function readBody(req, limit = 20000) {
   });
 }
 
+// Tin anh Nekoma nhắn trong chat → nối 1 dòng vào .studio/chat/<channel>.jsonl
+async function postChat(req, res) {
+  const json = (code, obj) => { res.writeHead(code, { 'Content-Type': MIME['.json'] }); res.end(JSON.stringify(obj)); };
+  let body;
+  try { body = JSON.parse(await readBody(req)); } catch { return json(400, { ok: false, error: 'Dữ liệu không hợp lệ' }); }
+  const channel = String(body.channel || COMPANY);
+  const text = String(body.text || '').trim();
+  if (!/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(channel) || channel === ORDER_THREAD) return json(400, { ok: false, error: 'Tên kênh không hợp lệ' });
+  if (!text || text.length > 2000) return json(400, { ok: false, error: 'Tin nhắn trống hoặc quá dài' });
+  // "@ink …" → gửi riêng cho Ink; "@grid" là tên của manager
+  const m = text.match(/@([a-z]+)/i);
+  const tag = m ? m[1].toLowerCase() : '';
+  const to = tag === 'grid' ? 'manager' : AGENTS.includes(tag) ? tag : 'team';
+  const msg = { from: 'cd', to, text, via: 'office' };
+  await appendChat(channel, msg);
+  json(200, { ok: true, message: { ...msg, time: nowIso() } });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -242,6 +265,10 @@ const server = http.createServer(async (req, res) => {
       const body = JSON.stringify({ ...(await readState()), runner: runnerState() });
       res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
       return res.end(body);
+    }
+    if (url.pathname === '/api/chat') {
+      if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }
+      return await postChat(req, res);
     }
     if (url.pathname === '/api/order' || url.pathname === '/api/session/new') {
       if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }
@@ -284,9 +311,9 @@ function listen(port) {
     console.log(`\n  Văn phòng:  ${url}`);
     console.log(`  Đang đọc:   ${STUDIO}`);
     console.log(runner.claudePath ? `  Claude Code: ${runner.claudePath} ${runner.claudeVersion}` : '  ⚠ Chưa tìm thấy Claude Code — ô gõ lệnh trên web sẽ chưa dùng được.');
-    console.log('\n  Giữ cửa sổ này mở. Gõ lệnh ngay trong văn phòng (Phòng hội thoại).');
+    console.log('\n  Giữ cửa sổ này mở. Gõ lệnh ngay trong văn phòng (Chat công ty → ⚡ Giao việc).');
     console.log('  Tắt server: bấm Ctrl + C\n');
-    if (!process.env.NO_OPEN) {
+    if (!process.env.NO_OPEN && !process.argv.includes('--no-open')) {
       const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
       exec(cmd, () => {});
     }

@@ -1,18 +1,19 @@
 # NEKOMA STUDIO · Agent Office 3D
 
 Studio sáng tạo chạy bằng các AI agent trong **Claude Code**, kèm một **văn phòng 3D** hiển thị trực tiếp ai đang làm gì.
-Creative Director là **Nekoma** (người thật). Agent nào được anh giao việc thì người đó mới làm.
+Creative Director là **Nekoma** (người thật). Anh giao thẳng cho từng người, hoặc giao **Grid** (Manager) để Grid tự chia việc cho team.
 
-| Khu | Agent | Vai trò |
+Văn phòng gồm 5 "đảo" lơ lửng nối bằng cầu. Khi một khu có người đang làm, các hạt sáng chạy trên cầu từ đảo điều phối sang khu đó.
+
+| Khu | Ai ngồi | Vai trò |
 |---|---|---|
-| A | **Brief** | Nhận brief & lên plan (chỉ đề xuất phân công) |
-| B | **Nekoma** | Creative Director — tầng lửng |
-| C | **Pixel** | Designer 2D — phòng kính |
-| D | **Cube** | Designer 3D — script Blender |
-| E | **Frame** | Motion Designer — storyboard, script After Effects |
-| F | **Ink** | Content / Copywriter |
-| G | **Kuma** 🐻 | Trợ lý cá nhân — báo cáo, deadline |
-| H | — | Phòng hội thoại |
+| A · Tầng chỉ huy | **Nekoma** · **Lue** 🦆 | Creative Director + trợ lý cá nhân |
+| B · Đảo điều phối | **Grid** 🧭 | Manager — chỉ dưới quyền anh, nhận việc lớn rồi chia lại cho team |
+| C · Phòng chữ | **Brief** · **Ink** | Nhận brief & plan · Content / Copywriter |
+| D · Xưởng hình | **Pixel** · **Cube** · **Frame** | Designer 2D · 3D · Motion (mỗi người một phòng kính) |
+| E · Quảng trường chat | — | Chat chung của cả công ty |
+
+Sơ đồ: **Nekoma → Grid → Brief, Ink, Pixel, Cube, Frame**. Lue chỉ nhận việc từ anh.
 
 ---
 
@@ -35,8 +36,8 @@ Trình duyệt tự mở `http://localhost:5173`. Giữ cửa sổ server mở t
 
 ### Cách 1 — gõ ngay trên web (khuyên dùng)
 
-Gõ vào ô chat ở góc dưới trái văn phòng hoặc tab **Phòng hội thoại**, rồi bấm Enter.
-Server trên máy sẽ gọi Claude Code chạy nền để chuyển việc cho đúng người. Bấm tên agent phía trên ô chat để chèn nhanh "Ink ơi, …".
+Gõ vào ô **Giao việc…** ở góc dưới trái văn phòng, hoặc kênh **⚡ Giao việc** trong tab **Chat công ty**, rồi bấm Enter.
+Server trên máy sẽ gọi Claude Code chạy nền để chuyển việc cho đúng người. Gõ `Grid ơi, lo trọn gói…` để Grid tự chia việc, hoặc bấm tên agent phía trên ô chat để chèn nhanh "Ink ơi, …".
 
 - Lệnh xếp hàng lần lượt. Claude nhớ ngữ cảnh các lệnh trước, bấm **Phiên mới** để bắt đầu lại.
 - Ở chế độ này agent được tự ghi file trong dự án, được đọc web và chạy lệnh `date`/`mkdir`/`ls`. Các lệnh hệ thống khác bị chặn.
@@ -51,23 +52,36 @@ cd Z:\DAI_WORKSPACE\Agent-AI-Office
 claude
 ```
 
-Rồi gọi tên người cần giao:
+Giao trọn gói cho Manager — Grid chia việc, gọi từng bạn làm, rồi gom kết quả về cho anh duyệt:
+
+```
+Grid ơi, lo trọn gói chiến dịch này giúp anh, tự chia cho team nhé: <dán brief>
+```
+
+Hoặc gọi thẳng tên từng người:
 
 ```
 Brief ơi, phân tích brief này và lên plan giúp anh: <dán brief>
 Ink ơi, viết 5 headline cho task autumn-cafe
-Pixel ơi, làm visual direction cho task autumn-cafe
-Kuma ơi, làm báo cáo đầu ngày cho anh
+Lue ơi, làm báo cáo đầu ngày cho anh
 ```
 
-Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 giây, nhân vật chuyển sang **ĐANG LÀM**, tin nhắn hiện ở **Phòng hội thoại**.
+Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 giây, nhân vật chuyển sang **ĐANG LÀM**, tin nhắn hiện ở **Chat công ty**.
+
+**Bấm vào bất kỳ nhân viên nào** (trong văn phòng 3D hoặc danh sách bên phải) để mở hồ sơ: việc đang làm, tiến độ, việc gần đây, tin nhắn, lệnh mẫu.
+
+### Chat công ty
+
+Tab **Chat công ty** giống Slack: kênh `# chung` cho cả công ty, kênh **⚡ Giao việc** (Claude chạy thật), mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
+Ở `# chung` anh nhắn như nhóm chat (Enter để gửi, `@Grid`, `@Ink`… để gọi tên), tin lưu vào `.studio/chat/company.jsonl` và **chỉ được ghi lại**.
+Muốn agent làm việc thật thì gõ ở kênh **⚡ Giao việc**.
 Sản phẩm nằm trong `outputs/<tên-task>/`. Khi anh nói "duyệt" hoặc "ok", agent chuyển sang **ĐÃ XONG**.
 
 ## Cấu trúc
 
 ```
 CLAUDE.md            luật làm việc + giao thức ghi trạng thái (agent đọc file này)
-.claude/agents/      định nghĩa 6 agent
+.claude/agents/      định nghĩa 7 agent (manager = Grid)
 .studio/             trạng thái sống: status/, tasks.json, chat/, reports/
 outputs/             sản phẩm của agent
 office/              văn phòng 3D (Three.js) + server.mjs

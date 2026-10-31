@@ -30,32 +30,29 @@
         <nav class="tabs" id="tabs" aria-label="Chế độ xem">
           <button data-view="board">Bảng công việc</button>
           <button data-view="office" class="active">Toàn cảnh</button>
-          <button data-view="chat">Phòng hội thoại</button>
-          <button data-view="kuma">Phòng Kuma</button>
+          <button data-view="chat">Chat công ty</button>
+          <button data-view="lue">Phòng Lue</button>
         </nav>
       </header>
 
       <section class="mini-chat" id="mini-chat">
         <button class="mini-head" id="mini-toggle">
-          <span>▾ PHÒNG HỘI THOẠI · <b id="mini-count">0</b> TIN</span>
+          <span>▾ CHAT CÔNG TY · <b id="mini-count">0</b> TIN</span>
           <span class="mini-more" id="mini-more">CHI TIẾT →</span>
         </button>
         <ol class="mini-list" id="mini-list"></ol>
-        <div class="composer composer-mini" data-composer></div>
+        <form class="mini-order" id="mini-order">
+          <textarea rows="1" id="mini-order-input" placeholder="Giao việc… vd: Grid ơi, lo trọn gói brief này"></textarea>
+          <button type="submit">Giao</button>
+        </form>
+        <small class="mini-order-status" id="mini-order-status"></small>
       </section>
 
+      <aside class="profile" id="profile" hidden aria-label="Hồ sơ nhân viên"></aside>
+
       <section class="overlay" id="view-board" hidden></section>
-      <section class="overlay" id="view-chat" hidden>
-        <div class="ov-head"><div><div class="ov-eyebrow" id="chat-eyebrow">PHÒNG HỘI THOẠI</div><h2>Team đang trao đổi</h2></div></div>
-        <div class="chat-layout">
-          <div class="thread-list" id="thread-list"></div>
-          <div class="chat-col">
-            <div class="msgs" id="msgs"></div>
-            <div class="composer composer-big" data-composer></div>
-          </div>
-        </div>
-      </section>
-      <section class="overlay" id="view-kuma" hidden></section>
+      <section class="overlay" id="view-chat" hidden></section>
+      <section class="overlay" id="view-lue" hidden></section>
 
       <div id="toasts" aria-live="polite"></div>
       <div class="loading" id="loading"><div class="spinner"></div><p>Đang dựng văn phòng…</p></div>
@@ -72,7 +69,7 @@
           <button class="btn" id="btn-reset">Toàn cảnh</button>
         </div>
       </div>
-      <div class="section-title">ĐỘI NGŨ <span id="team-summary"></span></div>
+      <div class="section-title">ĐỘI NGŨ THEO KHU <span id="team-summary"></span></div>
       <ul class="agent-list" id="agent-list"></ul>
       <div class="detail" id="detail"></div>
     </aside>

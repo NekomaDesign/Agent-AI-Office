@@ -1,7 +1,5 @@
-// Giao diện 2D: sidebar, mini chat, bảng công việc, phòng hội thoại, phòng Kuma, toast.
-import { AGENTS, CD, PEOPLE, STATES } from './agents.js';
-
-let MODE = 'connecting';
+// Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Lue, toast.
+import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY, ORDERS } from './agents.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,15 +15,21 @@ export function timeAgo(iso) {
   if (s < 86400) return `${Math.floor(s / 3600)} giờ trước`;
   return d.toLocaleDateString('vi-VN');
 }
-const hhmm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); };
+const hhmm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }); };
 
-function avatar(id) {
+const face = (id) => { const p = PEOPLE[id]; return p ? (p.hair === 'duck' || p.bot ? p.emoji : esc(p.name[0])) : esc((id || '?')[0]); };
+function avatar(id, size = '') {
   const p = PEOPLE[id] || { name: id || '?', color: '#888' };
-  const face = id === 'kuma' ? '🐻' : id === 'studio' ? '✦' : esc((p.name || '?')[0]);
-  return `<span class="avatar ${p.human ? 'human' : ''} ${p.bot ? 'bot' : ''}" style="--c:${p.color}">${face}</span>`;
+  return `<span class="avatar ${size} ${p.human ? 'human' : ''} ${p.bot ? 'bot' : ''}" style="--c:${p.color}">${face(id)}</span>`;
 }
-const nameOf = (id) => (id === 'cd' ? `Anh ${CD.name}` : (PEOPLE[id]?.name || id || '?'));
+const nameOf = (id) => (id === 'cd' ? `Anh ${CD.name}` : id === 'team' ? 'Cả team' : (PEOPLE[id]?.name || id || '?'));
 const pill = (s) => { const st = STATES[s] || STATES.idle; return `<span class="pill" data-s="${s}" style="--c:${st.color}">${st.label}</span>`; };
+// tô sáng @tên trong tin nhắn
+const richText = (t) => esc(t).replace(/@([a-zà-ỹ]+)/gi, (m, n) => {
+  const id = n.toLowerCase() === 'grid' ? 'manager' : n.toLowerCase();
+  const p = PEOPLE[id];
+  return p ? `<span class="mention" style="--c:${p.color}">@${esc(p.name)}</span>` : m;
+});
 
 function allMessages(chats) {
   const out = [];
@@ -34,11 +38,15 @@ function allMessages(chats) {
 }
 
 // ======================================================================
-export function createUI({ world }) {
+const elapsed = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+export function createUI({ world, send, order, newSession }) {
   let data = null;
+  let mode = 'connecting';
   let selected = 'cd';
+  let profileId = null;
   let view = 'office';
-  let activeThread = 'all';
+  let channel = COMPANY;
   let activeReport = 0;
   let prevAgents = null;
   let prevMsgKeys = null;
@@ -48,43 +56,96 @@ export function createUI({ world }) {
   const tabs = $('#tabs');
   tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) setView(b.dataset.view); });
   $('#btn-board').addEventListener('click', () => { setView('office'); world.focusBoard(); });
-  $('#btn-reset').addEventListener('click', () => { setView('office'); world.resetView(); select('cd', false); });
+  $('#btn-reset').addEventListener('click', () => { setView('office'); world.resetView(); closeProfile(); select('cd', false); });
   $('#mini-more').addEventListener('click', (e) => { e.stopPropagation(); setView('chat'); });
   $('#mini-toggle').addEventListener('click', () => $('#mini-chat').classList.toggle('collapsed'));
-
-  // ---- ô gõ lệnh ----
-  const composers = [...document.querySelectorAll('[data-composer]')].map((el) => createComposer(el, () => data, (d) => { if (d) update(d); }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && profileId) closeProfile(); });
 
   function setView(v) {
     view = v;
     tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
-    for (const k of ['board', 'chat', 'kuma']) $(`#view-${k}`).hidden = v !== k;
+    for (const k of ['board', 'chat', 'lue']) $(`#view-${k}`).hidden = v !== k;
     $('#mini-chat').style.display = v === 'office' ? '' : 'none';
+    $('#profile').hidden = v !== 'office' || !profileId;
     world.setPaused(v !== 'office');
     render();
-    if (v === 'chat') { const m = $('#msgs'); if (m) m.scrollTop = m.scrollHeight; }
+    if (v === 'chat') { scrollMsgs(true); $('#composer-input')?.focus(); }
   }
 
   function select(id, fly = true) {
     selected = id;
     world.select(id);
-    if (fly) { setView('office'); world.focusPerson(id); }
+    if (fly) { setView('office'); world.focusPerson(id); openProfile(id); }
     renderSide();
   }
 
+  function openProfile(id) {
+    profileId = id;
+    const el = $('#profile');
+    el.hidden = view !== 'office';
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    renderProfile();
+  }
+  function closeProfile() { profileId = null; $('#profile').hidden = true; }
+
+  // ---- giao việc thật (Claude Code chạy nền) ----
+  let flash = null; // { text, err, until }
+  function runnerStatus() {
+    const run = data?.runner;
+    if (mode === 'demo') return { ok: false, text: 'Bản demo — không giao việc thật được. Chạy start-studio.bat để dùng thật.' };
+    if (mode !== 'live') return { ok: false, text: 'Đang chờ server…' };
+    if (!run) return { ok: false, warn: true, text: 'Server cũ — tắt và mở lại start-studio.bat để bật giao việc trên web.' };
+    if (!run.available) return { ok: false, warn: true, html: 'Chưa tìm thấy Claude Code trên máy. Cài: <code>irm https://claude.ai/install.ps1 | iex</code> rồi mở lại start-studio.bat' };
+    if (run.busy) return { ok: true, busy: true, html: `<i class="dot"></i> Claude đang xử lý <span class="cs-time" data-start="${esc(run.startedAt)}">${elapsed(run.startedAt)}</span>${run.queue ? ` · ${run.queue} lệnh đang chờ` : ''} — “${esc(run.currentText.slice(0, 60))}${run.currentText.length > 60 ? '…' : ''}”` };
+    return { ok: true, session: run.session, text: run.session ? 'Sẵn sàng · Claude nhớ ngữ cảnh các lệnh trước' : 'Sẵn sàng nhận việc · Enter để gửi, Shift+Enter xuống dòng' };
+  }
+  function paintStatus(el) {
+    if (!el) return;
+    if (flash && Date.now() < flash.until) { el.className = el.dataset.base + (flash.err ? ' err' : ''); el.textContent = flash.text; return; }
+    const r = runnerStatus();
+    el.className = el.dataset.base + (r.busy ? ' busy' : r.warn ? ' err' : '');
+    if (r.html) el.innerHTML = r.html; else el.textContent = r.text;
+    if (r.ok && r.session && !r.busy && el.id === 'composer-hint') el.insertAdjacentHTML('beforeend', ' <button type="button" class="cs-new" id="cs-new">Phiên mới</button>');
+  }
+  async function giveOrder(text) {
+    const res = await order(text);
+    flash = { text: res.queue > 0 ? `Đã xếp hàng · còn ${res.queue} lệnh phía trước` : 'Đã gửi · Claude đang nhận việc…', until: Date.now() + 4000 };
+  }
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#cs-new')) return;
+    try { await newSession(); flash = { text: 'Đã mở phiên mới', until: Date.now() + 3000 }; } catch (err) { flash = { text: err.message, err: true, until: Date.now() + 4000 }; }
+    paintStatus($('#composer-hint'));
+  });
+  $('#mini-order-status').dataset.base = 'mini-order-status';
+  const miniTa = $('#mini-order-input');
+  miniTa.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#mini-order').requestSubmit(); } });
+  $('#mini-order').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = miniTa.value.trim();
+    if (!text) return;
+    try { await giveOrder(text); miniTa.value = ''; } catch (err) { flash = { text: `Chưa gửi được: ${err.message}`, err: true, until: Date.now() + 5000 }; }
+    renderOrderBox();
+  });
+  function renderOrderBox() {
+    const r = runnerStatus();
+    miniTa.disabled = !r.ok; $('#mini-order button').disabled = !r.ok;
+    paintStatus($('#mini-order-status'));
+  }
+
   // ---- mode ----
-  function setMode(mode) {
-    MODE = mode;
-    composers.forEach((c) => c.refresh());
+  function setMode(m) {
+    mode = m;
     const chip = $('#mode-chip');
-    chip.dataset.mode = mode;
-    chip.textContent = { connecting: 'ĐANG KẾT NỐI…', live: '● LIVE · ĐỌC .studio/', demo: 'DEMO · DỮ LIỆU GIẢ LẬP', offline: 'MẤT KẾT NỐI SERVER' }[mode];
+    chip.dataset.mode = m;
+    chip.textContent = { connecting: 'ĐANG KẾT NỐI…', live: '● LIVE · ĐỌC .studio/', demo: 'DEMO · DỮ LIỆU GIẢ LẬP', offline: 'MẤT KẾT NỐI SERVER' }[m];
     $('#mode-box').innerHTML = {
       connecting: 'Đang tìm server của studio…',
-      live: '<b>LIVE</b> — đang đọc trạng thái thật trong <code>.studio/</code>. Gõ lệnh ở ô chat (góc dưới trái hoặc Phòng hội thoại), Claude Code trên máy sẽ chuyển việc cho đúng người.',
-      demo: '<b>DEMO</b> — dữ liệu giả lập, không nối với agent thật. Chạy <code>start-studio.bat</code> trên máy để xem studio thật.',
+      live: '<b>LIVE</b> — đang đọc trạng thái thật trong <code>.studio/</code>. Giao việc trong Claude Code hoặc nhắn trong Chat công ty.',
+      demo: '<b>DEMO</b> — dữ liệu giả lập: anh giao Grid trọn gói, Grid chia lại cho team. Chạy <code>start-studio.bat</code> để xem studio thật.',
       offline: '<b>Mất kết nối</b> — cửa sổ server đã tắt? Chạy lại <code>start-studio.bat</code>.',
-    }[mode];
+    }[m];
+    if (view === 'chat') renderChat();
+    renderOrderBox();
   }
 
   // ---- data ----
@@ -95,7 +156,6 @@ export function createUI({ world }) {
     $('#studio-tagline').textContent = d.studio.tagline;
     document.title = `${d.studio.name} · Agent Office`;
 
-    // toast khi trạng thái đổi
     if (prevAgents) {
       for (const a of AGENTS) {
         const before = prevAgents[a.id]?.state, now = d.agents[a.id].state;
@@ -106,18 +166,13 @@ export function createUI({ world }) {
 
     // bong bóng thoại khi có tin mới
     const msgs = allMessages(d.chats);
-    const keys = new Set(msgs.map((m) => `${m.taskId}|${m.time}|${m.from}|${m.text.slice(0, 20)}`));
-    if (prevMsgKeys) {
-      for (const m of msgs) {
-        const k = `${m.taskId}|${m.time}|${m.from}|${m.text.slice(0, 20)}`;
-        if (!prevMsgKeys.has(k)) world.say(m.from, m.text);
-      }
-    }
-    prevMsgKeys = keys;
+    const keyOf = (m) => `${m.taskId}|${m.time}|${m.from}|${m.text.slice(0, 20)}`;
+    if (prevMsgKeys) for (const m of msgs) if (!prevMsgKeys.has(keyOf(m))) world.say(m.from, m.text);
+    prevMsgKeys = new Set(msgs.map(keyOf));
 
     world.update(d);
     render();
-    composers.forEach((c) => c.refresh());
+    renderOrderBox();
   }
 
   function toast(a, state, task) {
@@ -126,6 +181,7 @@ export function createUI({ world }) {
     el.className = 'toast';
     el.style.setProperty('--c', st.color);
     el.innerHTML = `${avatar(a.id)}<div><b>${esc(a.name)}</b> → ${st.label}${task && state === 'working' ? `<br><small>${esc(task)}</small>` : ''}</div>`;
+    el.addEventListener('click', () => select(a.id));
     $('#toasts').appendChild(el);
     setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 4200);
   }
@@ -135,10 +191,14 @@ export function createUI({ world }) {
     if (!data) return;
     renderSide();
     renderMini();
+    if (profileId && view === 'office') renderProfile();
     if (view === 'board') renderBoard();
     if (view === 'chat') renderChat();
-    if (view === 'kuma') renderKuma();
+    if (view === 'lue') renderLue();
   }
+
+  const tasksOf = (id) => data.tasks.filter((t) => t.assignee === id).sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+  const byState = (s) => AGENTS.filter((a) => data.agents[a.id].state === s);
 
   function renderSide() {
     if (!data) return;
@@ -146,45 +206,87 @@ export function createUI({ world }) {
     for (const a of AGENTS) counts[data.agents[a.id].state] = (counts[data.agents[a.id].state] || 0) + 1;
     $('#team-summary').textContent = `${counts.working || 0} ĐANG LÀM · ${counts.idle || 0} RẢNH`;
 
-    const waiting = AGENTS.filter((a) => data.agents[a.id].state === 'waiting_review');
-    const list = [CD, ...AGENTS].map((p) => {
+    const item = (p) => {
       const s = p.human ? null : data.agents[p.id];
       const right = p.human ? `<span class="pill" style="--c:#1d1c19;color:#f2c230">BẠN</span>` : pill(s.state);
-      return `<li><button class="agent-item ${p.human ? 'human' : ''} ${selected === p.id ? 'selected' : ''}" data-id="${p.id}" style="--c:${p.color}">
-        <span class="sq">${p.id === 'kuma' ? '🐻' : esc(p.name[0])}</span>
-        <span><b>${esc(p.name)}</b><small>${esc(p.role)}</small></span>${right}</button></li>`;
-    }).join('');
+      const sub = p.human ? p.role : s.state === 'working' && s.task ? `${s.progress}% · ${s.task}` : p.role;
+      return `<li><button class="agent-item ${p.human ? 'human' : ''} ${selected === p.id ? 'selected' : ''} ${p.id === 'manager' ? 'mgr' : ''}" data-id="${p.id}" style="--c:${p.color}">
+        <span class="sq">${face(p.id)}</span>
+        <span class="ai-main"><b>${esc(p.name)}</b><small>${esc(sub)}</small></span>${right}</button></li>`;
+    };
     const ul = $('#agent-list');
-    ul.innerHTML = list;
+    ul.innerHTML = Object.values(ZONES).filter((z) => z.id !== 'E').map((z) => {
+      const people = [CD, ...AGENTS].filter((p) => p.zone === z.id);
+      return `<li class="zone-group" style="--c:${z.color}"><div class="zg-head"><i></i>KHU ${z.id} · ${esc(z.name.toUpperCase())}</div><ul>${people.map(item).join('')}</ul></li>`;
+    }).join('') + `<li class="zone-group" style="--c:${ZONES.E.color}"><button class="zg-chat" id="side-chat"><i></i>KHU E · ${esc(ZONES.E.name.toUpperCase())}<span>${(data.chats[COMPANY] || []).length} tin →</span></button></li>`;
     ul.querySelectorAll('.agent-item').forEach((b) => b.addEventListener('click', () => select(b.dataset.id)));
+    $('#side-chat').addEventListener('click', () => setView('chat'));
 
-    const p = PEOPLE[selected];
-    const det = $('#detail');
-    if (p.human) {
-      det.innerHTML = `<div class="detail-head" style="--c:#1d1c19"><span class="sq" style="color:#f2c230">${esc(p.name[0])}</span><div><h3>${esc(p.name)}</h3><small>${esc(p.role)} · Khu ${p.zone} · ${esc(p.zoneName)}</small></div></div>
-        <p>${esc(p.desc)}</p>
-        <dl class="kv"><dt>CHỜ ANH DUYỆT</dt><dd>${waiting.length ? waiting.map((a) => `<b>${esc(a.name)}</b> — ${esc(data.agents[a.id].task || '')}`).join('<br>') : 'Không có'}</dd>
-        <dt>ĐANG LÀM</dt><dd>${AGENTS.filter((a) => data.agents[a.id].state === 'working').map((a) => esc(a.name)).join(', ') || 'Không ai'}</dd>
-        <dt>CẦN HỖ TRỢ</dt><dd>${AGENTS.filter((a) => data.agents[a.id].state === 'blocked').map((a) => `<b>${esc(a.name)}</b> — ${esc(data.agents[a.id].note)}`).join('<br>') || 'Không có'}</dd></dl>
-        <p class="hint">Mở Claude Code trong thư mục dự án rồi gọi tên người cần giao, ví dụ <code>Ink ơi, viết 5 headline…</code>. Bấm vào một agent để xem lệnh mẫu.</p>`;
-      return;
-    }
-    const s = data.agents[p.id];
-    const st = STATES[s.state];
-    det.innerHTML = `<div class="detail-head" style="--c:${p.color}"><span class="sq">${p.id === 'kuma' ? '🐻' : esc(p.name[0])}</span><div><h3>${esc(p.name)}</h3><small>${esc(p.role)} · Khu ${p.zone} · ${esc(p.zoneName)}</small></div></div>
-      <p>${esc(p.desc)}</p>
+    // Hôm nay của anh
+    const waiting = byState('waiting_review'), working = byState('working'), blocked = byState('blocked');
+    const line = (list, f) => list.length ? list.map(f).join('') : '<span class="hint">Không có</span>';
+    $('#detail').innerHTML = `<div class="section-title" style="margin-top:0">HÔM NAY CỦA ANH</div>
       <dl class="kv">
-        <dt>TRẠNG THÁI</dt><dd>${pill(s.state)}</dd>
-        <dt>VIỆC</dt><dd>${esc(s.task) || '<span class="hint">Chưa được giao việc</span>'}</dd>
-        <dt>TIẾN ĐỘ</dt><dd><div class="bar" style="--c:${st.color}"><span><b style="width:${s.progress}%"></b></span>${s.progress}%</div></dd>
-        <dt>GHI CHÚ</dt><dd>${esc(s.note) || '—'}</dd>
-        <dt>CẬP NHẬT</dt><dd>${timeAgo(s.updated)}</dd>
+        <dt>CHỜ DUYỆT</dt><dd>${line(waiting, (a) => `<button class="link" data-id="${a.id}"><b>${esc(a.name)}</b> — ${esc(data.agents[a.id].task || '')}</button>`)}</dd>
+        <dt>ĐANG LÀM</dt><dd>${line(working, (a) => `<button class="link" data-id="${a.id}">${esc(a.name)}</button> `)}</dd>
+        <dt>CẦN HỖ TRỢ</dt><dd>${line(blocked, (a) => `<button class="link" data-id="${a.id}"><b>${esc(a.name)}</b> — ${esc(data.agents[a.id].note)}</button>`)}</dd>
       </dl>
-      <div class="order-box"><header>LỆNH MẪU · DÁN VÀO CLAUDE CODE <button id="copy-order">COPY</button></header><pre>${esc(p.order)}</pre></div>`;
-    $('#copy-order').addEventListener('click', async (e) => {
-      try { await navigator.clipboard.writeText(p.order); e.target.textContent = 'ĐÃ COPY'; } catch { e.target.textContent = 'LỖI'; }
-      setTimeout(() => (e.target.textContent = 'COPY'), 1500);
-    });
+      <p class="hint">Bấm vào một nhân viên (trong văn phòng hoặc danh sách) để xem hồ sơ. Việc lớn cứ giao <b>Grid</b>, Grid tự chia cho team.</p>`;
+    $('#detail').querySelectorAll('.link').forEach((b) => b.addEventListener('click', () => select(b.dataset.id)));
+  }
+
+  function renderProfile() {
+    const box = $('#profile');
+    const p = PEOPLE[profileId];
+    if (!p || !data) return;
+    const z = ZONES[p.zone];
+    const head = `<button class="pf-close" id="pf-close" aria-label="Đóng">×</button>
+      <div class="pf-head" style="--c:${p.human ? '#1d1c19' : p.color}">
+        <span class="pf-ava ${p.human ? 'human' : ''}">${face(p.id)}</span>
+        <div><div class="pf-zone" style="--z:${z.color}">KHU ${z.id} · ${esc(z.name)}</div><h3>${esc(p.name)}</h3><small>${esc(p.role)}</small></div>
+      </div>`;
+    const people = (ids) => ids.map((id) => `<button class="chip-person" data-id="${id}" style="--c:${PEOPLE[id].color}">${face(id)} ${esc(PEOPLE[id].name)}</button>`).join('');
+
+    if (p.human) {
+      const waiting = byState('waiting_review');
+      box.innerHTML = head + `<p class="pf-desc">${esc(p.desc)}</p>
+        <div class="pf-block"><h4>SƠ ĐỒ ĐỘI NGŨ</h4>
+          <div class="org">
+            <div class="org-row"><span class="org-node human">★ Nekoma</span></div>
+            <div class="org-row two"><button class="org-node" data-id="manager" style="--c:${PEOPLE.manager.color}">🧭 Grid · Manager</button><button class="org-node" data-id="lue" style="--c:${PEOPLE.lue.color}">🦆 Lue · Trợ lý</button></div>
+            <div class="org-row">${people(AGENTS.filter((a) => a.reportsTo === 'manager').map((a) => a.id))}</div>
+          </div></div>
+        <div class="pf-block"><h4>CHỜ ANH DUYỆT · ${waiting.length}</h4>${waiting.length ? waiting.map((a) => `<button class="pf-task" data-id="${a.id}">${avatar(a.id, 'sm')}<span><b>${esc(a.name)}</b><small>${esc(data.agents[a.id].task)}</small></span></button>`).join('') : '<p class="hint">Không có việc nào chờ anh.</p>'}</div>`;
+    } else {
+      const s = data.agents[p.id];
+      const st = STATES[s.state];
+      const mine = tasksOf(p.id);
+      const cnt = (k) => mine.filter((t) => t.state === k).length;
+      const msgs = allMessages(data.chats).filter((m) => m.from === p.id || m.to === p.id).slice(-4).reverse();
+      const boss = p.reportsTo === 'manager' ? 'Grid (Manager) · Anh Nekoma' : 'Anh Nekoma';
+      const team = p.id === 'manager' ? `<div class="pf-block"><h4>ĐANG QUẢN LÝ</h4><div class="chips-wrap">${people(AGENTS.filter((a) => a.reportsTo === 'manager').map((a) => a.id))}</div></div>` : '';
+      box.innerHTML = head + `<p class="pf-desc">${esc(p.desc)}</p>
+        <div class="pf-now" style="--c:${st.color}">
+          <div class="pf-now-top">${pill(s.state)}<span class="hint">${timeAgo(s.updated)}</span></div>
+          <b>${esc(s.task) || '<span class="hint">Chưa được giao việc</span>'}</b>
+          <div class="bar" style="--c:${st.color}"><span><b style="width:${s.progress}%"></b></span>${s.progress}%</div>
+          ${s.note ? `<small>${esc(s.note)}</small>` : ''}
+        </div>
+        <div class="pf-stats"><div><b>${mine.length}</b><small>VIỆC</small></div><div><b>${cnt('working')}</b><small>ĐANG LÀM</small></div><div><b>${cnt('waiting_review')}</b><small>CHỜ DUYỆT</small></div><div><b>${cnt('done')}</b><small>XONG</small></div></div>
+        <dl class="kv"><dt>BÁO CÁO CHO</dt><dd>${boss}</dd><dt>NHẬN VIỆC TỪ</dt><dd>${p.reportsTo === 'manager' ? 'Anh Nekoma hoặc Grid' : 'Chỉ anh Nekoma'}</dd></dl>
+        ${team}
+        <div class="pf-block"><h4>VIỆC GẦN ĐÂY</h4>${mine.length ? mine.slice(0, 5).map((t) => `<div class="pf-row"><span>${esc(t.title || t.id)}<small>${t.assignedBy === 'manager' ? '← Grid giao' : '← Anh giao'} · ${timeAgo(t.updated)}</small></span>${pill(t.state)}</div>`).join('') : '<p class="hint">Chưa có việc nào.</p>'}</div>
+        <div class="pf-block"><h4>TIN NHẮN GẦN ĐÂY</h4>${msgs.length ? msgs.map((m) => `<div class="pf-msg"><small><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · ${hhmm(m.time)}</small><p>${richText(m.text)}</p></div>`).join('') : '<p class="hint">Chưa có tin nhắn.</p>'}</div>
+        <div class="order-box"><header>LỆNH MẪU · DÁN VÀO CLAUDE CODE <button id="copy-order">COPY</button></header><pre>${esc(p.order)}</pre></div>
+        <div class="pf-actions"><button class="btn btn-dark" id="pf-dm">Nhắn @${esc(p.name)} trong chat chung</button></div>`;
+      $('#copy-order').addEventListener('click', async (e) => {
+        try { await navigator.clipboard.writeText(p.order); e.target.textContent = 'ĐÃ COPY'; } catch { e.target.textContent = 'LỖI'; }
+        setTimeout(() => (e.target.textContent = 'COPY'), 1500);
+      });
+      $('#pf-dm').addEventListener('click', () => { channel = COMPANY; setView('chat'); const ta = $('#composer-input'); if (ta) { ta.value = `@${p.name} `; ta.focus(); } });
+    }
+    $('#pf-close').addEventListener('click', closeProfile);
+    box.querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => select(b.dataset.id)));
   }
 
   function renderMini() {
@@ -193,176 +295,214 @@ export function createUI({ world }) {
     const last = msgs.slice(-3).reverse();
     $('#mini-list').innerHTML = last.length ? last.map((m) => {
       const p = PEOPLE[m.from] || { color: '#888' };
-      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · <time>${timeAgo(m.time)}</time></div><p>${esc(m.text)}</p></div></li>`;
+      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># chung</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p></div></li>`;
     }).join('') : '<li class="mini-empty">Chưa có tin nhắn nào.</li>';
   }
 
   function renderBoard() {
-    const tasks = data.tasks.slice().sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+    const all = data.tasks.slice().sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+    // việc con của Grid xếp ngay dưới việc cha
+    const ids = new Set(all.map((t) => t.id));
+    const tasks = [];
+    for (const t of all) {
+      if (t.parent && ids.has(t.parent)) continue;
+      tasks.push(t);
+      for (const c of all.filter((x) => x.parent === t.id)) tasks.push({ ...c, _child: true });
+    }
     const counts = {};
-    for (const t of tasks) counts[t.state] = (counts[t.state] || 0) + 1;
+    for (const t of all) counts[t.state] = (counts[t.state] || 0) + 1;
     const head = `<div class="ov-head"><div><div class="ov-eyebrow">${esc(data.studio.name)} · BẢNG CÔNG VIỆC</div><h2>Việc trong studio</h2></div>
       <div class="count-row">${Object.entries(STATES).map(([k, s]) => `<span class="count" style="--c:${s.color}"><i></i>${s.label} · ${counts[k] || 0}</span>`).join('')}</div></div>`;
-    const body = tasks.length ? `<div class="table-wrap"><table><thead><tr><th>VIỆC</th><th>NGƯỜI LÀM</th><th>TRẠNG THÁI</th><th>TIẾN ĐỘ</th><th>DEADLINE</th><th>CẬP NHẬT</th></tr></thead><tbody>
+    const body = tasks.length ? `<div class="table-wrap"><table><thead><tr><th>VIỆC</th><th>NGƯỜI LÀM</th><th>GIAO BỞI</th><th>TRẠNG THÁI</th><th>TIẾN ĐỘ</th><th>DEADLINE</th><th>CẬP NHẬT</th></tr></thead><tbody>
       ${tasks.map((t) => { const p = PEOPLE[t.assignee] || { name: t.assignee || '—', color: '#999' }; const st = STATES[t.state];
-        return `<tr><td><span class="proj">${esc(t.project || '')}</span>${esc(t.title || t.id)}</td>
-        <td><span class="person" style="--c:${p.color}"><i></i>${esc(p.name)}</span></td><td>${pill(t.state)}</td>
+        const by = t.assignedBy === 'manager' ? `<span class="person" style="--c:${PEOPLE.manager.color}"><i></i>Grid</span>` : '<span class="hint">Anh Nekoma</span>';
+        return `<tr class="${t._child ? 'child' : ''}"><td><span class="proj">${esc(t.project || '')}</span>${esc(t.title || t.id)}</td>
+        <td><button class="person" data-id="${esc(t.assignee)}" style="--c:${p.color}"><i></i>${esc(p.name)}</button></td><td>${by}</td><td>${pill(t.state)}</td>
         <td><div class="bar" style="--c:${st.color}"><span><b style="width:${t.progress}%"></b></span>${t.progress}%</div></td>
         <td>${esc(t.deadline || '—')}</td><td>${timeAgo(t.updated)}</td></tr>`; }).join('')}
       </tbody></table></div>`
-      : `<div class="empty"><b>Chưa có việc nào</b>Mở Claude Code và giao việc, ví dụ: <code>Brief ơi, phân tích brief này và lên plan giúp anh</code></div>`;
+      : `<div class="empty"><b>Chưa có việc nào</b>Mở Claude Code và giao việc, ví dụ: <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code></div>`;
     $('#view-board').innerHTML = head + body;
+    $('#view-board').querySelectorAll('button.person[data-id]').forEach((b) => b.addEventListener('click', () => PEOPLE[b.dataset.id] && select(b.dataset.id)));
   }
 
+  // ---------- CHAT CÔNG TY ----------
   function threadTitle(id) {
+    if (id === COMPANY) return { project: 'CẢ CÔNG TY', title: 'chung' };
+    if (id === ORDERS) return { project: 'CLAUDE CHẠY THẬT', title: '⚡ Giao việc' };
     const t = data.tasks.find((x) => x.id === id);
     if (t) return { project: t.project || '', title: t.title || id };
     if (id === 'studio-welcome') return { project: 'STUDIO', title: 'Chào mừng' };
     return { project: '', title: id.replace(/[-_]/g, ' ') };
   }
 
-  function renderChat() {
-    const threads = Object.entries(data.chats).filter(([, l]) => l.length)
-      .sort((a, b) => String(b[1].at(-1).time).localeCompare(String(a[1].at(-1).time)));
-    const total = threads.reduce((n, [, l]) => n + l.length, 0);
-    if (activeThread !== 'all' && !data.chats[activeThread]) activeThread = 'all';
-    $('#chat-eyebrow').textContent = `${data.studio.name} · PHÒNG HỘI THOẠI`;
-    const list = `<button class="thread ${activeThread === 'all' ? 'active' : ''}" data-t="all"><small>TẤT CẢ</small><b>${total} tin nhắn</b></button>` +
-      threads.map(([id, l]) => { const tt = threadTitle(id); return `<button class="thread ${activeThread === id ? 'active' : ''}" data-t="${esc(id)}"><small>${esc(tt.project)} · ${l.length} TIN</small><b>${esc(tt.title)}</b></button>`; }).join('');
-
-    const shown = activeThread === 'all' ? threads.slice().reverse() : threads.filter(([id]) => id === activeThread);
-    const html = shown.length ? shown.map(([id, l]) => { const tt = threadTitle(id);
-      return `<div class="msg-group-title">${esc(tt.project ? tt.project + ' · ' : '')}${esc(tt.title).toUpperCase()}</div>` + l.map((m) => {
-        const me = m.from === 'cd'; const p = PEOPLE[m.from] || { color: '#888' };
-        return `<div class="msg ${me ? 'me' : ''} ${m.from === 'studio' ? 'bot' : ''}">${avatar(m.from)}<div><div class="meta" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · ${hhmm(m.time)}</div><div class="text">${esc(m.text)}</div></div></div>`;
-      }).join(''); }).join('')
-      : '<div class="empty"><b>Phòng hội thoại còn trống</b>Gõ lệnh ở ô bên dưới để giao việc cho team.</div>';
-
-    const tl = $('#thread-list');
-    if (tl.dataset.sig !== list) {
-      tl.innerHTML = list; tl.dataset.sig = list;
-      tl.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeThread = b.dataset.t; renderChat(); const m = $('#msgs'); m.scrollTop = m.scrollHeight; }));
+  function buildChatShell() {
+    const box = $('#view-chat');
+    box.innerHTML = `<div class="ov-head"><div><div class="ov-eyebrow" id="chat-eyebrow"></div><h2>Chat công ty</h2></div></div>
+      <div class="slack">
+        <nav class="channels" id="ch-list" aria-label="Kênh"></nav>
+        <section class="room">
+          <header class="room-head" id="room-head"></header>
+          <div class="msgs" id="msgs"></div>
+          <form class="composer" id="composer">
+            <div class="mention-row" id="mention-row"></div>
+            <div class="composer-box"><textarea id="composer-input" rows="2" placeholder="Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
+            <small class="composer-hint" id="composer-hint" data-base="composer-hint"></small>
+          </form>
+        </section>
+        <aside class="members" id="members"></aside>
+      </div>`;
+    $('#mention-row').innerHTML = AGENTS.map((a) => `<button type="button" data-n="${esc(a.name)}" style="--c:${a.color}">@${esc(a.name)}</button>`).join('');
+    $('#mention-row').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-n]'); if (!b) return;
+      insertName(b.dataset.n);
+    });
+    const ta = $('#composer-input');
+    // kênh ⚡ Giao việc: chèn "Ink ơi, …"; kênh khác: chèn "@Ink"
+    function insertName(n) {
+      if (channel === ORDERS) ta.value = `${n} ơi, ` + ta.value.replace(/^\S+ ơi, /, '');
+      else ta.value = `@${n} ` + ta.value.replace(/^@\S+\s*/, '');
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     }
-    const m = $('#msgs');
-    if (m.dataset.sig !== html) {
-      const atBottom = m.scrollTop + m.clientHeight >= m.scrollHeight - 40;
-      m.innerHTML = html; m.dataset.sig = html;
-      if (atBottom) m.scrollTop = m.scrollHeight;
-    }
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#composer').requestSubmit(); } });
+    $('#composer').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = ta.value.trim();
+      if (!text) return;
+      const hint = $('#composer-hint');
+      const btn = $('#composer-send');
+      btn.disabled = true;
+      try {
+        if (channel === ORDERS) await giveOrder(text);
+        else {
+          await send(channel === 'all' ? COMPANY : channel, text);
+          flash = { text: mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).' : 'Đã gửi · chỉ ghi lại. Muốn agent làm thật thì gửi ở kênh ⚡ Giao việc.', until: Date.now() + 5000 };
+        }
+        ta.value = '';
+        paintStatus(hint);
+        scrollMsgs(true);
+      } catch (err) {
+        flash = { text: `Chưa gửi được: ${err.message}`, err: true, until: Date.now() + 6000 };
+        paintStatus(hint);
+      } finally { btn.disabled = false; }
+    });
+    $('#ch-list').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-t]'); if (!b) return;
+      channel = b.dataset.t; renderChat(); scrollMsgs(true);
+    });
+    $('#members').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-id]'); if (!b) return;
+      if (b.dataset.id === 'cd') return;
+      insertName(PEOPLE[b.dataset.id].name);
+    });
   }
 
-  function renderKuma() {
+  function scrollMsgs(force) {
+    const m = $('#msgs'); if (!m) return;
+    if (force || m.dataset.stick !== '0') m.scrollTop = m.scrollHeight;
+  }
+
+  function renderChat() {
+    if (!data) return;
+    if (!$('#composer')) buildChatShell();
+    const threads = Object.entries(data.chats).filter(([id, l]) => l.length && id !== COMPANY && id !== ORDERS)
+      .sort((a, b) => String(b[1].at(-1).time).localeCompare(String(a[1].at(-1).time)));
+    const company = data.chats[COMPANY] || [];
+    const total = Object.values(data.chats).reduce((n, l) => n + l.length, 0);
+    if (channel !== 'all' && channel !== COMPANY && channel !== ORDERS && !data.chats[channel]) channel = COMPANY;
+    $('#chat-eyebrow').textContent = `${data.studio.name} · KHU E · ${ZONES.E.name.toUpperCase()}`;
+
+    const chBtn = (id, label, sub, n) => `<button class="channel ${channel === id ? 'active' : ''}" data-t="${esc(id)}"><b>${label}</b><small>${esc(sub)}</small>${n ? `<span class="n">${n}</span>` : ''}</button>`;
+    $('#ch-list').innerHTML = `<div class="ch-title">KÊNH</div>` +
+      chBtn(COMPANY, '# chung', 'Cả công ty', company.length) +
+      chBtn(ORDERS, '⚡ Giao việc', 'Claude Code làm thật', (data.chats[ORDERS] || []).length) +
+      chBtn('all', '◎ Tất cả hoạt động', 'Mọi kênh gộp lại', total) +
+      `<div class="ch-title">VIỆC (${threads.length})</div>` +
+      threads.map(([id, l]) => { const tt = threadTitle(id); return chBtn(id, `# ${esc(tt.title)}`, tt.project, l.length); }).join('');
+
+    let shown;
+    if (channel === 'all') shown = Object.entries(data.chats).filter(([, l]) => l.length);
+    else shown = [[channel, data.chats[channel] || []]];
+    const list = channel === 'all' ? allMessages(Object.fromEntries(shown)) : shown[0][1].map((m) => ({ ...m, taskId: channel }));
+    const tt = threadTitle(channel === 'all' ? COMPANY : channel);
+    $('#room-head').innerHTML = channel === 'all'
+      ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # chung</small>`
+      : channel === ORDERS
+        ? `<b>⚡ Giao việc</b><small>Gõ ở đây là Claude Code trên máy chạy thật: gọi "Grid ơi…" để giao trọn gói, hoặc gọi thẳng tên từng bạn</small>`
+        : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Lue và cả team · tin ở đây chỉ ghi lại' : esc(tt.project)}</small>`;
+
+    let lastDay = '', lastFrom = '';
+    const html = list.length ? list.map((m) => {
+      const d = new Date(m.time); const day = isNaN(d) ? '' : d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' });
+      const sep = day && day !== lastDay ? `<div class="day-sep"><span>${esc(day)}</span></div>` : '';
+      if (sep) lastFrom = '';
+      lastDay = day || lastDay;
+      const p = PEOPLE[m.from] || { color: '#888', role: '' };
+      const cont = m.from === lastFrom; lastFrom = m.from;
+      const where = channel === 'all' ? `<span class="in-ch"># ${esc(threadTitle(m.taskId).title)}</span>` : '';
+      const toMe = m.to === 'cd' ? ' to-me' : '';
+      return sep + `<div class="smsg ${cont ? 'cont' : ''}${toMe}">${cont ? '<span class="avatar-gap"></span>' : avatar(m.from)}<div class="smsg-body">
+        ${cont ? '' : `<div class="smeta"><b style="--c:${p.color}">${esc(nameOf(m.from))}</b><span class="role">${esc(p.role || '')}</span><time>${hhmm(m.time)}</time>${m.to && m.to !== 'team' ? `<span class="to">→ ${esc(nameOf(m.to))}</span>` : ''}${where}</div>`}
+        <div class="stext">${richText(m.text)}</div></div></div>`;
+    }).join('') : channel === ORDERS
+      ? `<div class="empty"><b>Chưa có lệnh nào</b>Gõ ví dụ <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code> — Claude sẽ chuyển việc cho đúng người.</div>`
+      : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Muốn agent làm việc thật thì dùng kênh <b>⚡ Giao việc</b>.</div>`;
+    const box = $('#msgs');
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    box.dataset.stick = atBottom ? '1' : '0';
+    const prevTop = box.scrollTop;
+    box.innerHTML = html;
+    if (atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = prevTop;
+
+    const isOrder = channel === ORDERS;
+    const canSend = isOrder ? runnerStatus().ok : mode === 'live' || mode === 'demo';
+    $('#composer-input').disabled = !canSend;
+    $('#composer-send').disabled = !canSend;
+    $('#composer-send').textContent = isOrder ? 'Giao việc ↵' : 'Gửi ↵';
+    $('#composer').classList.toggle('order', isOrder);
+    $('#mention-row').querySelectorAll('button').forEach((b) => (b.textContent = isOrder ? `${b.dataset.n} ơi` : `@${b.dataset.n}`));
+    $('#composer-input').placeholder = !canSend
+      ? (isOrder ? runnerStatus().text || 'Chưa giao việc được' : 'Chưa kết nối server — chạy start-studio.bat để nhắn')
+      : isOrder ? 'Giao việc… vd: Grid ơi, lo trọn gói brief Autumn Café giúp anh'
+      : channel === COMPANY || channel === 'all' ? 'Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên' : `Nhắn trong # ${tt.title}…`;
+    if (isOrder || (flash && Date.now() < flash.until)) paintStatus($('#composer-hint'));
+    else { const h = $('#composer-hint'); h.className = 'composer-hint'; h.textContent = ''; }
+
+    const mem = (p) => {
+      const s = p.human ? null : data.agents[p.id];
+      const st = s ? STATES[s.state] : null;
+      return `<button class="member" data-id="${p.id}" title="${p.human ? '' : 'Bấm để @' + esc(p.name)}"><span class="mdot" style="--c:${st ? st.color : '#2f9a5c'}"></span>${avatar(p.id, 'sm')}<span><b>${esc(p.name)}</b><small>${p.human ? 'Đang online' : esc(st.short)}</small></span></button>`;
+    };
+    $('#members').innerHTML = `<div class="ch-title">THÀNH VIÊN · ${AGENTS.length + 1}</div>${[CD, ...AGENTS].map(mem).join('')}`;
+  }
+
+  function renderLue() {
     const reps = data.reports;
-    const box = $('#view-kuma');
-    const head = `<div class="ov-head"><div><div class="ov-eyebrow">KHU G · TRỢ LÝ CÁ NHÂN</div><h2>Phòng Kuma 🐻</h2></div></div>`;
+    const box = $('#view-lue');
+    const head = `<div class="ov-head"><div><div class="ov-eyebrow">KHU A · TRỢ LÝ CÁ NHÂN</div><h2>Phòng Lue 🦆</h2></div></div>`;
     if (!reps.length) {
-      box.innerHTML = head + `<div class="empty"><b>Chưa có báo cáo nào</b>Gõ trong Claude Code: <code>Kuma ơi, làm báo cáo đầu ngày cho anh</code><br>Báo cáo sẽ lưu ở <code>.studio/reports/</code> và hiện ở đây.</div>`;
+      box.innerHTML = head + `<div class="empty"><b>Chưa có báo cáo nào</b>Gõ trong Claude Code: <code>Lue ơi, làm báo cáo đầu ngày cho anh</code><br>Báo cáo sẽ lưu ở <code>.studio/reports/</code> và hiện ở đây.</div>`;
       return;
     }
     activeReport = Math.min(activeReport, reps.length - 1);
-    box.innerHTML = head + `<div class="kuma-layout"><div class="thread-list">${reps.map((r, i) => `<button class="thread ${i === activeReport ? 'active' : ''}" data-i="${i}"><small>BÁO CÁO</small><b>${esc(r.date || r.name)}</b></button>`).join('')}</div>
+    box.innerHTML = head + `<div class="lue-layout"><div class="thread-list">${reps.map((r, i) => `<button class="thread ${i === activeReport ? 'active' : ''}" data-i="${i}"><small>BÁO CÁO</small><b>${esc(r.date || r.name)}</b></button>`).join('')}</div>
       <article class="report">${md(reps[activeReport].content)}</article></div>`;
-    box.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeReport = +b.dataset.i; renderKuma(); }));
+    box.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeReport = +b.dataset.i; renderLue(); }));
   }
 
   // clock chip
   setInterval(() => {
     const t = lastUpdate ? lastUpdate.toLocaleTimeString('vi-VN', { hour12: false }) : '--:--:--';
     $('#clock-chip').textContent = `CẬP NHẬT LÚC ${t}`;
-    composers.forEach((c) => c.tickClock());
+    document.querySelectorAll('.cs-time').forEach((el) => (el.textContent = elapsed(el.dataset.start)));
   }, 500);
   // làm mới "x phút trước"
-  setInterval(() => { if (data) { renderMini(); } }, 15000);
+  setInterval(() => { if (data) renderMini(); }, 15000);
 
-  return { update, setMode, select, setView };
+  return { update, setMode, select, setView, openProfile };
 }
 
-
-// ======================================================================
-// Ô gõ lệnh: gửi lệnh tới server → server gọi Claude Code chạy nền
-function createComposer(el, getData) {
-  const big = el.classList.contains('composer-big');
-  el.innerHTML = `
-    ${big ? `<div class="mention-row">${AGENTS.map((a) => `<button type="button" class="mention" data-id="${a.id}" style="--c:${a.color}">${a.id === 'kuma' ? '🐻' : ''}${esc(a.name)}</button>`).join('')}</div>` : ''}
-    <form class="comp-form">
-      <textarea rows="${big ? 2 : 1}" placeholder="Giao việc… vd: Ink ơi, viết 5 headline cho brief Autumn Café"></textarea>
-      <button type="submit" class="send" title="Gửi (Enter)">Gửi</button>
-    </form>
-    <div class="comp-status"><span class="cs-text"></span><button type="button" class="cs-new" hidden>Phiên mới</button></div>`;
-  const ta = el.querySelector('textarea');
-  const form = el.querySelector('form');
-  const btn = el.querySelector('.send');
-  const st = el.querySelector('.cs-text');
-  const newBtn = el.querySelector('.cs-new');
-  let sending = false;
-  let flashMsg = '', flashUntil = 0;
-
-  el.querySelectorAll('.mention').forEach((b) => b.addEventListener('click', () => {
-    const a = PEOPLE[b.dataset.id];
-    const prefix = `${a.name} ơi, `;
-    if (!ta.value.startsWith(prefix)) ta.value = prefix + ta.value.replace(/^\S+ ơi, /, '');
-    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
-  }));
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
-  });
-  ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const text = ta.value.trim();
-    if (!text || sending || MODE !== 'live') return;
-    sending = true; btn.disabled = true;
-    try {
-      const r = await fetch('./api/order', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio': '1' }, body: JSON.stringify({ text }) });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) throw new Error(j.error || r.status);
-      ta.value = ''; ta.style.height = '';
-      flash(j.queue > 0 ? `Đã xếp hàng · còn ${j.queue} lệnh phía trước` : 'Đã gửi · Claude đang nhận việc…');
-    } catch (err) {
-      flash(`Gửi không được (${err.message}). Server còn mở không?`);
-    } finally { sending = false; btn.disabled = false; }
-  });
-
-  newBtn.addEventListener('click', async () => {
-    try { await fetch('./api/session/new', { method: 'POST', headers: { 'X-Studio': '1' } }); flash('Đã mở phiên mới'); } catch {}
-  });
-
-  function flash(m) { flashMsg = m; flashUntil = Date.now() + 4000; refresh(); }
-
-  function elapsed(iso) {
-    const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000));
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  }
-
-  function refresh() {
-    const d = getData();
-    const live = MODE === 'live';
-    const run = d?.runner;
-    ta.disabled = !live;
-    btn.disabled = !live || sending;
-    ta.placeholder = live ? 'Giao việc… vd: Ink ơi, viết 5 headline cho brief Autumn Café' : MODE === 'demo' ? 'Bản demo — không gửi lệnh được. Chạy start-studio.bat để dùng thật.' : 'Đang chờ server…';
-    el.dataset.state = '';
-    newBtn.hidden = !(live && run?.available && run?.session && !run?.busy);
-    if (flashMsg && Date.now() < flashUntil) { st.textContent = flashMsg; return; }
-    if (!live) { st.textContent = ''; return; }
-    if (!run) { st.textContent = 'Server cũ — tắt và mở lại start-studio.bat để bật ô lệnh.'; el.dataset.state = 'warn'; return; }
-    if (!run.available) { st.innerHTML = 'Chưa tìm thấy Claude Code trên máy. Cài: <code>irm https://claude.ai/install.ps1 | iex</code> rồi mở lại start-studio.bat'; el.dataset.state = 'warn'; return; }
-    if (run.busy) {
-      el.dataset.state = 'busy';
-      st.innerHTML = `<i class="dot"></i> Claude đang xử lý <span class="cs-time" data-start="${esc(run.startedAt)}">${elapsed(run.startedAt)}</span>${run.queue ? ` · ${run.queue} lệnh đang chờ` : ''} — “${esc(run.currentText.slice(0, 60))}${run.currentText.length > 60 ? '…' : ''}”`;
-      return;
-    }
-    st.textContent = run.session ? 'Sẵn sàng · đang tiếp tục phiên trước (Claude nhớ ngữ cảnh)' : 'Sẵn sàng nhận lệnh · Enter để gửi, Shift+Enter xuống dòng';
-  }
-
-  return {
-    refresh,
-    tickClock() { const t = el.querySelector('.cs-time'); if (t) t.textContent = elapsed(t.dataset.start); },
-  };
-}
-
-// Markdown tối giản cho báo cáo của Kuma
+// Markdown tối giản cho báo cáo của Lue
 function md(src = '') {
   const lines = String(src).replace(/\r/g, '').split('\n');
   let html = '', list = null;
