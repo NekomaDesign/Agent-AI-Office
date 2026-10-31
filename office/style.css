@@ -145,8 +145,8 @@ td .proj { font: 600 11px var(--mono); color: var(--ink-3); display: block; marg
 .msg.me .meta { text-align: right; }
 .msg.me .text { background: var(--ink); color: #fff; border-color: var(--ink); border-radius: 16px 16px 4px 16px; }
 
-/* kuma room */
-.kuma-layout { position: relative; display: grid; grid-template-columns: 220px 1fr; gap: 18px; }
+/* lue room */
+.lue-layout { position: relative; display: grid; grid-template-columns: 220px 1fr; gap: 18px; }
 .report { background: var(--paper-2); border: 1px solid var(--line); border-radius: 16px; padding: 26px 30px; line-height: 1.65; box-shadow: var(--shadow); }
 .report h1 { font-size: 26px; margin: 0 0 12px; }
 .report h2 { font-size: 16px; margin: 22px 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
@@ -211,7 +211,7 @@ td .proj { font: 600 11px var(--mono); color: var(--ink-3); display: block; marg
   .tabs { max-width: 100%; overflow-x: auto; }
   .mini-chat { display: none; }
   .overlay { padding: 120px 16px 16px; }
-  .chat-layout, .kuma-layout { grid-template-columns: 1fr; height: auto; }
+  .chat-layout, .lue-layout { grid-template-columns: 1fr; height: auto; }
   .thread-list { flex-direction: row; overflow-x: auto; }
   .thread { min-width: 200px; }
   .msgs { max-height: 60vh; }

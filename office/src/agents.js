@@ -17,10 +17,10 @@ export const AGENTS = [
     order: 'Grid ơi, lo trọn gói việc này giúp anh, tự chia cho team nhé:\n',
   },
   {
-    id: 'kuma', name: 'Kuma', role: 'Trợ lý cá nhân', zone: 'A', reportsTo: 'cd',
-    color: '#a8692f', shirt: '#f2c230', hair: 'bear', emoji: '🐻',
+    id: 'lue', name: 'Lue', role: 'Trợ lý cá nhân', zone: 'A', reportsTo: 'cd',
+    color: '#e09a00', shirt: '#f28fab', hair: 'duck', emoji: '🦆',
     desc: 'Ngồi cạnh anh ở tầng chỉ huy. Báo cáo đầu/cuối ngày, nhắc deadline, lên lịch, ghi chú họp, dọn bảng công việc.',
-    order: 'Kuma ơi, làm báo cáo đầu ngày cho anh nhé.',
+    order: 'Lue ơi, làm báo cáo đầu ngày cho anh nhé.',
   },
   {
     id: 'brief', name: 'Brief', role: 'Nhận brief & Plan', zone: 'C', reportsTo: 'manager',

@@ -13,7 +13,7 @@ import { exec } from 'node:child_process';
 const WEB = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(WEB, '..');
 const STUDIO = path.join(ROOT, '.studio');
-const AGENTS = ['manager', 'kuma', 'brief', 'ink', 'pixel', 'cube', 'frame'];
+const AGENTS = ['manager', 'lue', 'brief', 'ink', 'pixel', 'cube', 'frame'];
 const COMPANY = 'company';
 const START_PORT = Number(process.env.PORT) || 5173;
 
@@ -43,7 +43,7 @@ async function ensureStudio() {
   const chats = (await fs.readdir(path.join(STUDIO, 'chat'))).filter((f) => f.endsWith('.jsonl'));
   if (!chats.length) {
     await fs.writeFile(path.join(STUDIO, 'chat', 'studio-welcome.jsonl'),
-      JSON.stringify({ from: 'kuma', to: 'cd', text: 'Chào anh Nekoma! Studio đã mở cửa 🐻 Cả team đang rảnh, anh giao việc cho ai thì người đó mới bắt tay vào làm nha.', time: nowIso() }) + '\n', 'utf8');
+      JSON.stringify({ from: 'lue', to: 'cd', text: 'Chào anh Nekoma! Studio đã mở cửa 🦆 Cả team đang rảnh, anh giao việc cho ai thì người đó mới bắt tay vào làm nha.', time: nowIso() }) + '\n', 'utf8');
   }
 }
 

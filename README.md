@@ -7,13 +7,13 @@ Văn phòng gồm 5 "đảo" lơ lửng nối bằng cầu. Khi một khu có ng
 
 | Khu | Ai ngồi | Vai trò |
 |---|---|---|
-| A · Tầng chỉ huy | **Nekoma** · **Kuma** 🐻 | Creative Director + trợ lý cá nhân |
+| A · Tầng chỉ huy | **Nekoma** · **Lue** 🦆 | Creative Director + trợ lý cá nhân |
 | B · Đảo điều phối | **Grid** 🧭 | Manager — chỉ dưới quyền anh, nhận việc lớn rồi chia lại cho team |
 | C · Phòng chữ | **Brief** · **Ink** | Nhận brief & plan · Content / Copywriter |
 | D · Xưởng hình | **Pixel** · **Cube** · **Frame** | Designer 2D · 3D · Motion (mỗi người một phòng kính) |
 | E · Quảng trường chat | — | Chat chung của cả công ty |
 
-Sơ đồ: **Nekoma → Grid → Brief, Ink, Pixel, Cube, Frame**. Kuma chỉ nhận việc từ anh.
+Sơ đồ: **Nekoma → Grid → Brief, Ink, Pixel, Cube, Frame**. Lue chỉ nhận việc từ anh.
 
 ---
 
@@ -52,7 +52,7 @@ Hoặc gọi thẳng tên từng người:
 ```
 Brief ơi, phân tích brief này và lên plan giúp anh: <dán brief>
 Ink ơi, viết 5 headline cho task autumn-cafe
-Kuma ơi, làm báo cáo đầu ngày cho anh
+Lue ơi, làm báo cáo đầu ngày cho anh
 ```
 
 Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 giây, nhân vật chuyển sang **ĐANG LÀM**, tin nhắn hiện ở **Chat công ty**.

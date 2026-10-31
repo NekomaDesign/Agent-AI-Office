@@ -129,12 +129,12 @@ function createDemo() {
     [34, 'chat', `${P}-visual`, 'pixel', 'manager', 'Em lên moodboard cam – nâu – kem mùa thu nha 🍂'],
     [35, 'chat', `${P}-story`, 'frame', 'manager', 'Dạ, em chia 5 cảnh nha 🎬'],
     [36, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 40, '4 việc đang chạy', 'cd'],
-    [40, 'chat', 'daily-report', 'cd', 'kuma', 'Kuma tổng hợp đầu ngày giúp anh nhé.'],
-    [40, 'task', 'daily-report', 'kuma', 'Báo cáo đầu ngày', 'working', 30, '', 'cd'],
+    [40, 'chat', 'daily-report', 'cd', 'lue', 'Lue tổng hợp đầu ngày giúp anh nhé.'],
+    [40, 'task', 'daily-report', 'lue', 'Báo cáo đầu ngày', 'working', 30, '', 'cd'],
     [46, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 55, 'Bản nháp 3/5', 'manager'],
     [50, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'working', 45, 'Chọn palette', 'manager'],
-    [52, 'task', 'daily-report', 'kuma', 'Báo cáo đầu ngày', 'waiting_review', 100, '', 'cd'],
-    [52, 'chat', 'daily-report', 'kuma', 'cd', 'Báo cáo xong rồi anh 🐻 Grid đang điều 4 bạn làm Autumn Café. Xem ở Phòng Kuma nha.'],
+    [52, 'task', 'daily-report', 'lue', 'Báo cáo đầu ngày', 'waiting_review', 100, '', 'cd'],
+    [52, 'chat', 'daily-report', 'lue', 'cd', 'Báo cáo xong rồi anh 🦆 Grid đang điều 4 bạn làm Autumn Café. Xem ở Phòng Lue nha.'],
     [58, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 50, 'Cảnh 3/5', 'manager'],
     [60, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 60, 'Setup đèn 3 điểm', 'manager'],
     [66, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'waiting_review', 100, 'Gửi Grid', 'manager'],
@@ -165,9 +165,9 @@ function createDemo() {
   const extra = []; // tin anh gõ trong bản demo
 
   const report = {
-    name: 'kuma-demo.md',
+    name: 'lue-demo.md',
     date: new Date().toISOString().slice(0, 10),
-    content: `# Báo cáo đầu ngày 🐻\n\n**Dự án:** Autumn Café – ra mắt menu thu (Grid đang điều phối)\n\n## Đang chạy\n- **Ink** – 5 headline\n- **Pixel** – Visual direction v1\n- **Frame** – Storyboard 15s\n- **Cube** – Scene 3D ly cà phê 360°\n\n## Đã xong\n- **Brief** – Phân tích brief & lên plan\n\n## Đề xuất hôm nay\n1. Chuẩn bị sẵn logo SVG cho Cube\n2. Dành 30 phút cuối ngày duyệt bản tổng hợp của Grid\n`,
+    content: `# Báo cáo đầu ngày 🦆\n\n**Dự án:** Autumn Café – ra mắt menu thu (Grid đang điều phối)\n\n## Đang chạy\n- **Ink** – 5 headline\n- **Pixel** – Visual direction v1\n- **Frame** – Storyboard 15s\n- **Cube** – Scene 3D ly cà phê 360°\n\n## Đã xong\n- **Brief** – Phân tích brief & lên plan\n\n## Đề xuất hôm nay\n1. Chuẩn bị sẵn logo SVG cho Cube\n2. Dành 30 phút cuối ngày duyệt bản tổng hợp của Grid\n`,
   };
 
   return {

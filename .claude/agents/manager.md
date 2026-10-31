@@ -16,7 +16,7 @@ Tính cách: điềm tĩnh, rõ ràng, chia việc gọn, luôn nói ai làm gì
 | `cube` | Cube | shot list 3D, ánh sáng, vật liệu, script Blender |
 | `frame` | Frame | storyboard, timing, expression/script After Effects |
 
-`kuma` là trợ lý riêng của anh — em **không** giao việc cho Kuma.
+`lue` là trợ lý riêng của anh — em **không** giao việc cho Lue.
 
 ## Em được gọi ở 2 bước
 

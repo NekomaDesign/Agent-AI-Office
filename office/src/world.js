@@ -29,7 +29,7 @@ const BACK = (k) => ISLANDS[k].z - ISLANDS[k].d / 2 + 0.26; // mặt trước c�
 // Vị trí ghế của từng người + hướng nhìn (yaw: 0 = nhìn về phía sau, π/2 = nhìn sang trái, π = nhìn ra ngoài)
 const STATIONS = {
   cd:      { x: 9.4, y: ISLANDS.A.y, z: -7.0, yaw: Math.PI },
-  kuma:    { x: 5.7, y: ISLANDS.A.y, z: -5.3, yaw: Math.PI / 2 },
+  lue:     { x: 5.0, y: ISLANDS.A.y, z: -5.6, yaw: -Math.PI / 2 },
   manager: { x: 0, y: ISLANDS.B.y, z: 0.75, yaw: 0 },
   brief:   { x: -9.7, y: 0, z: -5.3, yaw: 0 },
   ink:     { x: -6.5, y: 0, z: -5.3, yaw: 0 },
@@ -273,7 +273,7 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
         zoneTags[z.id].dataset.busy = help ? 'help' : busy ? 'busy' : '';
         if (!bridges[z.id]) continue;
         const active = z.id === 'E' ? !!freshChat
-          : z.id === 'A' ? ['working', 'waiting_review'].includes(A.manager.state) || A.kuma.state === 'working'
+          : z.id === 'A' ? ['working', 'waiting_review'].includes(A.manager.state) || A.lue.state === 'working'
           : busy > 0;
         bridges[z.id].setActive(active);
       }
@@ -835,7 +835,7 @@ function buildDecor(world, tickers) {
   const pc1 = plant(1.15); pc1.position.set(cLeft + 0.45, 0, cBack + 0.45); world.add(pc1);
   const pc2 = plant(0.85, P.orange); pc2.position.set(C.x + C.w / 2 - 0.5, 0, cBack + 0.5); world.add(pc2);
 
-  // ---------------- A · TẦNG CHỈ HUY (Nekoma + Kuma) ----------------
+  // ---------------- A · TẦNG CHỈ HUY (Nekoma + Lue) ----------------
   const A = ISLANDS.A, aBack = BACK('A'), ay = A.y;
   const wa = wallPiece(A.w - 0.5, 3.0); wa.position.set(A.x, ay, aBack - 0.11); world.add(wa);
   // moodboard sau lưng CD
@@ -861,7 +861,7 @@ function buildDecor(world, tickers) {
     ctx.font = `800 70px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('★ NEKOMA', w / 2, h / 2 + 4);
   });
   const neon = texPlane(2.0, 0.5, neonTex.tex, { basic: true, transparent: true }); neon.position.set(STATIONS.cd.x, ay + 3.2, aBack + 0.03); world.add(neon);
-  // lịch của Kuma + đồng hồ
+  // lịch của Lue + đồng hồ
   const cal = canvasTex(360, 420, (ctx, w, h) => {
     const d = new Date();
     ctx.fillStyle = '#fbf9f5'; ctx.fillRect(0, 0, w, h);
@@ -1190,10 +1190,14 @@ function buildStation(person, cfg, world, onSelect) {
 function addProps(id, root) {
   const add = (o, x, y, z, ry = 0) => { put(o, x, y, z, ry); root.add(o); return o; };
   const mug = (c) => { const g = grp(cyl(0.055, 0.05, 0.12, c)); const h = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.012, 8, 16), M(c)); h.position.set(0.065, 0.06, 0); g.add(h); return g; };
-  if (id === 'kuma') {
+  if (id === 'lue') {
     add(mug(P.yellow), -0.55, 0.81, -0.6);
     add(plant(0.45, P.yellow), 0.7, 0.81, -1.0);
-    const hny = cyl(0.07, 0.07, 0.14, '#f2a92c', { m: { roughness: 0.3 } }); add(hny, -0.7, 0.81, -0.9);
+    // vịt cao su nhỏ trên bàn
+    const rd = grp(sph(0.07, '#f7d24a'), sph(0.045, '#f7d24a'));
+    rd.children[0].scale.set(1.2, 0.8, 1); rd.children[1].position.set(0, 0.07, -0.04);
+    const rb = sph(0.02, '#f39a2b'); rb.scale.set(1.4, 0.5, 1.2); rb.position.set(0, 0.065, -0.09); rd.add(rb);
+    add(rd, -0.7, 0.86, -0.9, 0.4);
   }
   if (id === 'brief') {
     ['#ffffff', '#f7f1e2', '#ffffff'].forEach((c, i) => add(box(0.32, 0.03, 0.42, c, { r: 0.005 }), -0.6, 0.81 + i * 0.03, -0.75, 0.1 * i));
@@ -1249,8 +1253,8 @@ function addProps(id, root) {
 
 function makeCharacter(person) {
   const g = new THREE.Group();
-  const skinTones = { manager: '#e3b48c', brief: '#efc4a0', pixel: '#f3cfb1', cube: '#d9a27a', frame: '#e8b894', ink: '#c98e66', kuma: '#9c6a3c', cd: '#eabf98' };
-  const hairCols = { manager: '#3b2a20', brief: '#2a211c', pixel: '#5a3424', cube: '#1c1c1e', frame: '#2b2b33', ink: '#2a211c', kuma: '#8a5a30', cd: '#1c1c1e' };
+  const skinTones = { manager: '#e3b48c', brief: '#efc4a0', pixel: '#f3cfb1', cube: '#d9a27a', frame: '#e8b894', ink: '#c98e66', lue: '#f7d24a', cd: '#eabf98' };
+  const hairCols = { manager: '#3b2a20', brief: '#2a211c', pixel: '#5a3424', cube: '#1c1c1e', frame: '#2b2b33', ink: '#2a211c', lue: '#8a5a30', cd: '#1c1c1e' };
   const skin = M(skinTones[person.id] || P.skin, { roughness: 0.7 });
   const shirt = M(person.shirt || person.color, { roughness: 0.85 });
   const pants = M(P.pants, { roughness: 0.85 });
@@ -1259,19 +1263,34 @@ function makeCharacter(person) {
   for (const s of [-1, 1]) {
     const thigh = capsule(0.095, 0.36, pants); thigh.rotation.x = Math.PI / 2; thigh.position.set(s * 0.12, 0.64, -0.18); g.add(thigh);
     const shin = capsule(0.085, 0.36, pants); shin.position.set(s * 0.12, 0.33, -0.42); g.add(shin);
-    const shoe = box(0.15, 0.1, 0.26, '#f4f1ea', { r: 0.04 }); put(shoe, s * 0.12, 0, -0.47); g.add(shoe);
+    const shoe = box(0.15, 0.1, 0.26, person.hair === 'duck' ? '#f39a2b' : '#f4f1ea', { r: 0.04 }); put(shoe, s * 0.12, 0, -0.47); g.add(shoe);
   }
   const body = new THREE.Group(); body.position.set(0, 0.6, 0.04); g.add(body);
   const torso = capsule(0.21, 0.32, shirt); torso.position.y = 0.38; torso.scale.set(1, 1, 0.8); body.add(torso);
   const neck = cyl(0.07, 0.07, 0.12, null, { mat: skin }); neck.position.y = 0.72; body.add(neck);
   const head = new THREE.Group(); head.position.y = 0.98; body.add(head);
 
-  if (person.hair === 'bear') {
-    const fur = M('#9c6a3c', { roughness: 0.95 });
-    const skull = shade(new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 16), fur)); head.add(skull);
-    for (const s of [-1, 1]) { const ear = shade(new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), fur)); ear.position.set(s * 0.16, 0.17, 0); head.add(ear); const inner = sph(0.045, '#e9b98c'); inner.position.set(s * 0.16, 0.17, -0.04); head.add(inner); }
-    const muzzle = sph(0.1, '#e9c9a2'); muzzle.scale.set(1, 0.8, 0.8); muzzle.position.set(0, -0.05, -0.18); head.add(muzzle);
-    const nose = sph(0.035, P.black); nose.position.set(0, -0.02, -0.26); head.add(nose);
+  if (person.hair === 'duck') {
+    // cô vịt: đầu vàng, mỏ cam, má hồng, nơ hồng
+    const feather = M('#f7d24a', { roughness: 0.8 });
+    const skull = shade(new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 16), feather)); skull.scale.set(1, 1.02, 1.05); head.add(skull);
+    const beakM = M('#f39a2b', { roughness: 0.5 });
+    const beakTop = shade(new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 10), beakM)); beakTop.scale.set(1.25, 0.42, 1.15); beakTop.position.set(0, -0.03, -0.23); head.add(beakTop);
+    const beakLow = shade(new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 10), beakM)); beakLow.scale.set(1.1, 0.32, 0.95); beakLow.position.set(0, -0.075, -0.2); head.add(beakLow);
+    for (const s of [-1, 1]) {
+      const eye = sph(0.032, P.black, { seg: 12 }); eye.position.set(s * 0.085, 0.05, -0.19); head.add(eye);
+      const glint = sph(0.01, P.white, { seg: 8 }); glint.position.set(s * 0.085 + 0.01, 0.065, -0.218); head.add(glint);
+      const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.035, 16), new THREE.MeshBasicMaterial({ color: '#ff9db5', transparent: true, opacity: 0.85 }));
+      cheek.position.set(s * 0.15, -0.025, -0.165); cheek.rotation.y = s * 0.75 + Math.PI; head.add(cheek);
+    }
+    // chỏm lông trên đỉnh đầu
+    [-0.04, 0.03].forEach((x, i) => { const tuft = shade(new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), feather)); tuft.scale.set(0.6, 1.4, 0.6); tuft.position.set(x, 0.25, 0.01 + i * 0.03); tuft.rotation.z = -x * 6; head.add(tuft); });
+    // nơ hồng
+    const bowM = M('#e8487a', { roughness: 0.45 });
+    const bow = new THREE.Group();
+    for (const s of [-1, 1]) { const wing = shade(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 12), bowM)); wing.rotation.z = s * Math.PI / 2; wing.position.x = s * 0.06; bow.add(wing); }
+    bow.add(sph(0.03, '#c9356a', { seg: 10 }));
+    bow.position.set(0.13, 0.17, 0.0); bow.rotation.set(0, 0.3, -0.5); head.add(bow);
   } else {
     const skull = shade(new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 16), skin)); head.add(skull);
     const capG = new THREE.SphereGeometry(0.215, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
@@ -1298,8 +1317,8 @@ function makeCharacter(person) {
     const sh = new THREE.Group(); sh.position.set(s * 0.27, 0.6, 0); body.add(sh);
     const upper = capsule(0.07, 0.22, shirt); upper.position.y = -0.16; sh.add(upper);
     const el = new THREE.Group(); el.position.y = -0.32; sh.add(el);
-    const fore = capsule(0.062, 0.2, person.hair === 'bear' ? M('#9c6a3c') : skin); fore.position.y = -0.14; el.add(fore);
-    const hand = shade(new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10), person.hair === 'bear' ? M('#9c6a3c') : skin)); hand.position.y = -0.29; el.add(hand);
+    const fore = capsule(0.062, 0.2, skin); fore.position.y = -0.14; el.add(fore);
+    const hand = shade(new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10), skin)); hand.position.y = -0.29; el.add(hand);
     arms[s] = { sh, el };
   }
 

@@ -9,7 +9,7 @@ Creative Director tên là **Nekoma**. Xưng hô: agent xưng "em", gọi CD là
 | id        | Tên    | Vai trò                        | Nhận việc từ  | Khu (văn phòng 3D) |
 |-----------|--------|--------------------------------|---------------|--------------------|
 | `cd`      | Nekoma | Creative Director (người thật) | —             | A · Tầng chỉ huy   |
-| `kuma`    | Kuma   | Trợ lý cá nhân                 | chỉ CD        | A · Tầng chỉ huy   |
+| `lue`     | Lue    | Trợ lý cá nhân                 | chỉ CD        | A · Tầng chỉ huy   |
 | `manager` | Grid   | Manager · Điều phối            | chỉ CD        | B · Đảo điều phối  |
 | `brief`   | Brief  | Nhận brief & lên plan          | CD hoặc Grid  | C · Phòng chữ      |
 | `ink`     | Ink    | Content / Copywriter           | CD hoặc Grid  | C · Phòng chữ      |
@@ -17,7 +17,7 @@ Creative Director tên là **Nekoma**. Xưng hô: agent xưng "em", gọi CD là
 | `cube`    | Cube   | Designer 3D                    | CD hoặc Grid  | D · Xưởng hình     |
 | `frame`   | Frame  | Motion Designer                | CD hoặc Grid  | D · Xưởng hình     |
 
-Sơ đồ: **Nekoma → Grid → (Brief, Ink, Pixel, Cube, Frame)**. Kuma là trợ lý riêng, chỉ làm việc với Nekoma.
+Sơ đồ: **Nekoma → Grid → (Brief, Ink, Pixel, Cube, Frame)**. Lue là trợ lý riêng, chỉ làm việc với Nekoma.
 Khu E · Quảng trường chat là kênh chat chung của cả công ty.
 
 ## QUY TẮC VÀNG
@@ -28,7 +28,7 @@ Khu E · Quảng trường chat là kênh chat chung của cả công ty.
    đó. CD gọi "Grid ơi…" / "Manager…" / "lo trọn gói…" → chạy **QUY TRÌNH MANAGER** bên dưới.
    CD chỉ dán brief mà không gọi tên ai → giao cho `brief`.
 3. Chỉ Grid được giao lại việc cho người khác. `brief` chỉ **đề xuất** phân công. Không ai giao
-   việc cho `kuma` ngoài CD.
+   việc cho `lue` ngoài CD.
 4. Nếu thiếu thông tin hoặc bị chặn (không tải được file, thiếu asset…) → chuyển trạng thái
    `blocked`, nhắn CD nói rõ cần gì, rồi dừng.
 5. Chỉ CD được chuyển việc sang `done`.
@@ -138,7 +138,7 @@ Dùng giờ Việt Nam (+07:00), định dạng ISO 8601. Lấy giờ bằng l�
   status/         1 file / agent
   tasks.json      bảng công việc
   chat/           1 file .jsonl / task
-  reports/        báo cáo của Kuma (kuma-YYYY-MM-DD.md)
+  reports/        báo cáo của Lue (lue-YYYY-MM-DD.md)
 outputs/          sản phẩm của agent, mỗi task 1 thư mục
 office/           mã nguồn văn phòng 3D — agent KHÔNG sửa trừ khi CD yêu cầu
 ```

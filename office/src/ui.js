@@ -1,4 +1,4 @@
-// Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Kuma, toast.
+// Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Lue, toast.
 import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY } from './agents.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -17,7 +17,7 @@ export function timeAgo(iso) {
 }
 const hhmm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }); };
 
-const face = (id) => { const p = PEOPLE[id]; return p ? (p.id === 'kuma' ? '🐻' : esc(p.name[0])) : esc((id || '?')[0]); };
+const face = (id) => { const p = PEOPLE[id]; return p ? (p.hair === 'duck' ? p.emoji : esc(p.name[0])) : esc((id || '?')[0]); };
 function avatar(id, size = '') {
   const p = PEOPLE[id] || { name: id || '?', color: '#888' };
   return `<span class="avatar ${size} ${p.human ? 'human' : ''}" style="--c:${p.color}">${face(id)}</span>`;
@@ -62,7 +62,7 @@ export function createUI({ world, send }) {
   function setView(v) {
     view = v;
     tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
-    for (const k of ['board', 'chat', 'kuma']) $(`#view-${k}`).hidden = v !== k;
+    for (const k of ['board', 'chat', 'lue']) $(`#view-${k}`).hidden = v !== k;
     $('#mini-chat').style.display = v === 'office' ? '' : 'none';
     $('#profile').hidden = v !== 'office' || !profileId;
     world.setPaused(v !== 'office');
@@ -146,7 +146,7 @@ export function createUI({ world, send }) {
     if (profileId && view === 'office') renderProfile();
     if (view === 'board') renderBoard();
     if (view === 'chat') renderChat();
-    if (view === 'kuma') renderKuma();
+    if (view === 'lue') renderLue();
   }
 
   const tasksOf = (id) => data.tasks.filter((t) => t.assignee === id).sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
@@ -205,7 +205,7 @@ export function createUI({ world, send }) {
         <div class="pf-block"><h4>SƠ ĐỒ ĐỘI NGŨ</h4>
           <div class="org">
             <div class="org-row"><span class="org-node human">★ Nekoma</span></div>
-            <div class="org-row two"><button class="org-node" data-id="manager" style="--c:${PEOPLE.manager.color}">🧭 Grid · Manager</button><button class="org-node" data-id="kuma" style="--c:${PEOPLE.kuma.color}">🐻 Kuma · Trợ lý</button></div>
+            <div class="org-row two"><button class="org-node" data-id="manager" style="--c:${PEOPLE.manager.color}">🧭 Grid · Manager</button><button class="org-node" data-id="lue" style="--c:${PEOPLE.lue.color}">🦆 Lue · Trợ lý</button></div>
             <div class="org-row">${people(AGENTS.filter((a) => a.reportsTo === 'manager').map((a) => a.id))}</div>
           </div></div>
         <div class="pf-block"><h4>CHỜ ANH DUYỆT · ${waiting.length}</h4>${waiting.length ? waiting.map((a) => `<button class="pf-task" data-id="${a.id}">${avatar(a.id, 'sm')}<span><b>${esc(a.name)}</b><small>${esc(data.agents[a.id].task)}</small></span></button>`).join('') : '<p class="hint">Không có việc nào chờ anh.</p>'}</div>`;
@@ -368,7 +368,7 @@ export function createUI({ world, send }) {
     const tt = threadTitle(channel === 'all' ? COMPANY : channel);
     $('#room-head').innerHTML = channel === 'all'
       ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # chung</small>`
-      : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Kuma và cả team' : esc(tt.project)}</small>`;
+      : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Lue và cả team' : esc(tt.project)}</small>`;
 
     let lastDay = '', lastFrom = '';
     const html = list.length ? list.map((m) => {
@@ -406,18 +406,18 @@ export function createUI({ world, send }) {
     $('#members').innerHTML = `<div class="ch-title">THÀNH VIÊN · ${AGENTS.length + 1}</div>${[CD, ...AGENTS].map(mem).join('')}`;
   }
 
-  function renderKuma() {
+  function renderLue() {
     const reps = data.reports;
-    const box = $('#view-kuma');
-    const head = `<div class="ov-head"><div><div class="ov-eyebrow">KHU A · TRỢ LÝ CÁ NHÂN</div><h2>Phòng Kuma 🐻</h2></div></div>`;
+    const box = $('#view-lue');
+    const head = `<div class="ov-head"><div><div class="ov-eyebrow">KHU A · TRỢ LÝ CÁ NHÂN</div><h2>Phòng Lue 🦆</h2></div></div>`;
     if (!reps.length) {
-      box.innerHTML = head + `<div class="empty"><b>Chưa có báo cáo nào</b>Gõ trong Claude Code: <code>Kuma ơi, làm báo cáo đầu ngày cho anh</code><br>Báo cáo sẽ lưu ở <code>.studio/reports/</code> và hiện ở đây.</div>`;
+      box.innerHTML = head + `<div class="empty"><b>Chưa có báo cáo nào</b>Gõ trong Claude Code: <code>Lue ơi, làm báo cáo đầu ngày cho anh</code><br>Báo cáo sẽ lưu ở <code>.studio/reports/</code> và hiện ở đây.</div>`;
       return;
     }
     activeReport = Math.min(activeReport, reps.length - 1);
-    box.innerHTML = head + `<div class="kuma-layout"><div class="thread-list">${reps.map((r, i) => `<button class="thread ${i === activeReport ? 'active' : ''}" data-i="${i}"><small>BÁO CÁO</small><b>${esc(r.date || r.name)}</b></button>`).join('')}</div>
+    box.innerHTML = head + `<div class="lue-layout"><div class="thread-list">${reps.map((r, i) => `<button class="thread ${i === activeReport ? 'active' : ''}" data-i="${i}"><small>BÁO CÁO</small><b>${esc(r.date || r.name)}</b></button>`).join('')}</div>
       <article class="report">${md(reps[activeReport].content)}</article></div>`;
-    box.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeReport = +b.dataset.i; renderKuma(); }));
+    box.querySelectorAll('.thread').forEach((b) => b.addEventListener('click', () => { activeReport = +b.dataset.i; renderLue(); }));
   }
 
   // clock chip
@@ -431,7 +431,7 @@ export function createUI({ world, send }) {
   return { update, setMode, select, setView, openProfile };
 }
 
-// Markdown tối giản cho báo cáo của Kuma
+// Markdown tối giản cho báo cáo của Lue
 function md(src = '') {
   const lines = String(src).replace(/\r/g, '').split('\n');
   let html = '', list = null;
