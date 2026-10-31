@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Write(./.studio/**)",
+      "Edit(./.studio/**)",
+      "Write(./outputs/**)",
+      "Edit(./outputs/**)",
+      "Bash(date:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

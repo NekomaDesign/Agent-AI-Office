@@ -1,0 +1,31 @@
+# Đăng bản DEMO của văn phòng 3D lên GitHub Pages (dữ liệu giả lập, không lộ dữ liệu studio).
+# Chạy tay: tab Actions → "Deploy demo office" → Run workflow.
+# Lần đầu cần bật: Settings → Pages → Source: GitHub Actions.
+name: Deploy demo office
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chuẩn bị thư mục web
+        run: |
+          mkdir -p _site
+          cp -r office/index.html office/style.css office/src _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

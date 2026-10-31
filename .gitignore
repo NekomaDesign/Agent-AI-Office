@@ -1,0 +1,19 @@
+# Trạng thái sống & sản phẩm của studio — giữ trên máy, không đẩy lên GitHub
+# (brief khách hàng, chat, output có thể là dữ liệu riêng tư).
+# Muốn sao lưu lên GitHub thì xoá các dòng tương ứng bên dưới.
+.studio/status/*.json
+.studio/tasks.json
+.studio/chat/*.jsonl
+.studio/reports/*.md
+.studio/archive/*
+!.studio/archive/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# Ảnh tham khảo cá nhân
+references/
+
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini

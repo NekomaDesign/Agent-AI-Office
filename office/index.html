@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nekoma Studio · Agent Office</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <main id="stage">
+      <div id="canvas-wrap"></div>
+
+      <header class="hud-top">
+        <div class="chips">
+          <span class="chip" id="clock-chip">CẬP NHẬT LÚC --:--:--</span>
+          <span class="chip chip-mode" id="mode-chip">ĐANG KẾT NỐI…</span>
+        </div>
+        <nav class="tabs" id="tabs" aria-label="Chế độ xem">
+          <button data-view="board">Bảng công việc</button>
+          <button data-view="office" class="active">Toàn cảnh</button>
+          <button data-view="chat">Phòng hội thoại</button>
+          <button data-view="kuma">Phòng Kuma</button>
+        </nav>
+      </header>
+
+      <section class="mini-chat" id="mini-chat">
+        <button class="mini-head" id="mini-toggle">
+          <span>▾ PHÒNG HỘI THOẠI · <b id="mini-count">0</b> TIN</span>
+          <span class="mini-more" id="mini-more">CHI TIẾT →</span>
+        </button>
+        <ol class="mini-list" id="mini-list"></ol>
+      </section>
+
+      <section class="overlay" id="view-board" hidden></section>
+      <section class="overlay" id="view-chat" hidden></section>
+      <section class="overlay" id="view-kuma" hidden></section>
+
+      <div id="toasts" aria-live="polite"></div>
+      <div class="loading" id="loading"><div class="spinner"></div><p>Đang dựng văn phòng…</p></div>
+    </main>
+
+    <aside id="side">
+      <div class="side-head">
+        <div class="eyebrow">NEKOMA DESIGN · AGENT OFFICE 3D</div>
+        <h1 id="studio-name">NEKOMA STUDIO</h1>
+        <div class="tagline" id="studio-tagline">Creative AI Production Lab</div>
+        <div class="mode-box" id="mode-box"></div>
+        <div class="btn-row">
+          <button class="btn btn-dark" id="btn-board">Xem màn hình việc</button>
+          <button class="btn" id="btn-reset">Toàn cảnh</button>
+        </div>
+      </div>
+      <div class="section-title">ĐỘI NGŨ <span id="team-summary"></span></div>
+      <ul class="agent-list" id="agent-list"></ul>
+      <div class="detail" id="detail"></div>
+    </aside>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+  <script>
+    // Nếu không tải được Three.js (mất mạng) thì báo rõ thay vì quay mãi
+    setTimeout(function () {
+      var el = document.getElementById('loading');
+      if (el && !el.classList.contains('hide')) {
+        el.classList.add('error');
+        el.innerHTML = '<p>Chưa tải được văn phòng 3D.<br>Máy cần có Internet để tải Three.js và font lần đầu.<br>Kiểm tra mạng rồi bấm F5.</p>';
+      }
+    }, 15000);
+  </script>
+</body>
+</html>
