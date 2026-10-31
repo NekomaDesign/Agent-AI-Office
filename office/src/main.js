@@ -15,15 +15,15 @@ async function boot() {
     ]);
   } catch { /* dùng font dự phòng */ }
 
-  let ui;
+  let ui, source;
   const world = createWorld(document.getElementById('canvas-wrap'), {
     onSelect: (id) => ui.select(id),
     onOpenChat: () => ui.setView('chat'),
   });
-  ui = createUI({ world });
+  ui = createUI({ world, send: (channel, text) => source.send(channel, text) });
   ui.select('cd', false);
 
-  startSource((data) => ui.update(data), (mode) => ui.setMode(mode));
+  source = startSource((data) => ui.update(data), (mode) => ui.setMode(mode));
 
   const loading = document.getElementById('loading');
   setTimeout(() => loading.classList.add('hide'), 300);

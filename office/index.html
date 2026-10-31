@@ -30,18 +30,20 @@
         <nav class="tabs" id="tabs" aria-label="Chế độ xem">
           <button data-view="board">Bảng công việc</button>
           <button data-view="office" class="active">Toàn cảnh</button>
-          <button data-view="chat">Phòng hội thoại</button>
+          <button data-view="chat">Chat công ty</button>
           <button data-view="kuma">Phòng Kuma</button>
         </nav>
       </header>
 
       <section class="mini-chat" id="mini-chat">
         <button class="mini-head" id="mini-toggle">
-          <span>▾ PHÒNG HỘI THOẠI · <b id="mini-count">0</b> TIN</span>
+          <span>▾ CHAT CÔNG TY · <b id="mini-count">0</b> TIN</span>
           <span class="mini-more" id="mini-more">CHI TIẾT →</span>
         </button>
         <ol class="mini-list" id="mini-list"></ol>
       </section>
+
+      <aside class="profile" id="profile" hidden aria-label="Hồ sơ nhân viên"></aside>
 
       <section class="overlay" id="view-board" hidden></section>
       <section class="overlay" id="view-chat" hidden></section>
@@ -62,7 +64,7 @@
           <button class="btn" id="btn-reset">Toàn cảnh</button>
         </div>
       </div>
-      <div class="section-title">ĐỘI NGŨ <span id="team-summary"></span></div>
+      <div class="section-title">ĐỘI NGŨ THEO KHU <span id="team-summary"></span></div>
       <ul class="agent-list" id="agent-list"></ul>
       <div class="detail" id="detail"></div>
     </aside>

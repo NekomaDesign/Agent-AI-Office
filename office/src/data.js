@@ -1,5 +1,5 @@
 // Nguồn dữ liệu: LIVE (đọc .studio/ qua server.mjs) hoặc DEMO (giả lập khi mở trên GitHub Pages).
-import { AGENTS, stateOf } from './agents.js';
+import { AGENTS, COMPANY, stateOf } from './agents.js';
 
 const DEFAULT_STUDIO = { name: 'NEKOMA STUDIO', tagline: 'Creative AI Production Lab', established: '2026', director: 'Nekoma' };
 
@@ -24,6 +24,7 @@ export function normalize(raw = {}) {
   for (const [k, v] of Object.entries(raw.chats || {})) {
     chats[k] = (Array.isArray(v) ? v : []).filter((m) => m && m.text);
   }
+  if (!chats[COMPANY]) chats[COMPANY] = [];
   return {
     studio: { ...DEFAULT_STUDIO, ...(raw.studio || {}) },
     agents,
@@ -36,6 +37,7 @@ export function normalize(raw = {}) {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- LIVE / DEMO ----------
+// Trả về { send(channel, text) } để anh Nekoma nhắn từ văn phòng.
 export function startSource(onData, onMode) {
   const forceDemo = new URLSearchParams(location.search).has('demo');
   let mode = forceDemo ? 'demo' : 'connecting';
@@ -65,74 +67,116 @@ export function startSource(onData, onMode) {
     setInterval(tick, 1000);
   }
 
-  if (forceDemo) { startDemo(); return; }
+  async function send(channel, text) {
+    if (mode === 'demo' && demo) {
+      demo.post(channel, text);
+      onData(normalize(demo.snapshot()));
+      return { ok: true };
+    }
+    const r = await fetch('./api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, text }),
+    });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(res.error || `Lỗi ${r.status}`);
+    await pollLive();
+    return res;
+  }
 
-  pollLive().then((ok) => {
-    if (!ok) { startDemo(); return; }
-    setInterval(async () => {
-      const ok2 = await pollLive();
-      if (!ok2) setMode('offline');
-    }, 3000);
-  });
+  if (forceDemo) startDemo();
+  else {
+    pollLive().then((ok) => {
+      if (!ok) { startDemo(); return; }
+      setInterval(async () => {
+        const ok2 = await pollLive();
+        if (!ok2) setMode('offline');
+      }, 3000);
+    });
+  }
+  return { send };
 }
 
-// ---------- DEMO: kịch bản 1 ngày làm việc, lặp lại mỗi ~2.5 phút ----------
+// ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------
 function createDemo() {
   const LOOP = 150; // giây
   const P = 'autumn-cafe';
+  const PROJECT = 'AUTUMN CAFÉ';
   const E = [
-    // [giây, loại, ...]
-    [0, 'chat', `${P}-brief`, 'cd', 'brief', 'Brief ơi, phân tích brief "Autumn Café – ra mắt menu thu" và lên plan giúp anh nha.'],
-    [0, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 5],
-    [3, 'chat', `${P}-brief`, 'brief', 'cd', 'Dạ em nhận rồi anh! Em đọc brief ngay 📋'],
-    [9, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 45, 'Đang tách deliverable'],
-    [16, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 80, 'Đang chia task'],
-    [22, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'waiting_review', 100, 'Chờ anh duyệt plan'],
-    [22, 'chat', `${P}-brief`, 'brief', 'cd', 'Xong rồi anh ơi ✨ Em đề xuất: Ink viết headline, Pixel làm visual direction, Frame storyboard 15s, Cube dựng ly cà phê 3D. Plan ở outputs/autumn-cafe-brief/ ạ.'],
-    [30, 'chat', `${P}-brief`, 'cd', 'brief', 'Ok duyệt plan nhé.'],
-    [30, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'done', 100, 'Anh đã duyệt'],
-    [31, 'chat', `${P}-headline`, 'cd', 'ink', 'Ink, viết 5 headline cho Autumn Café nhé.'],
-    [31, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 10],
-    [33, 'chat', `${P}-visual`, 'cd', 'pixel', 'Pixel, lên visual direction tông thu cho anh.'],
-    [33, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'working', 10],
-    [35, 'chat', `${P}-headline`, 'ink', 'cd', 'Dạ em vào việc liền nha anh ✍️'],
-    [37, 'chat', `${P}-visual`, 'pixel', 'cd', 'Em lên moodboard cam – nâu – kem mùa thu nha anh 🍂'],
-    [42, 'idle', 'brief'],
-    [48, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 55, 'Bản nháp 3/5'],
-    [52, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'working', 40, 'Chọn palette'],
-    [62, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'waiting_review', 100, 'Chờ anh chọn'],
-    [62, 'chat', `${P}-headline`, 'ink', 'cd', 'Anh ơi 5 headline đây ạ. Em thích nhất: "Thu về, cà phê ấm tay" ☕'],
-    [70, 'chat', `${P}-story`, 'cd', 'frame', 'Frame, làm storyboard 15s dựa trên headline của Ink nhé.'],
-    [70, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 10],
-    [72, 'chat', `${P}-cup3d`, 'cd', 'cube', 'Cube, viết script Blender dựng ly cà phê xoay 360 giúp anh.'],
-    [72, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 10],
-    [74, 'chat', `${P}-story`, 'frame', 'cd', 'Dạ, em chia 5 cảnh khớp nhạc 100 BPM nha anh 🎬'],
-    [80, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'waiting_review', 100, 'Chờ anh duyệt'],
-    [80, 'chat', `${P}-visual`, 'pixel', 'cd', 'Visual direction v1 xong rồi ạ: palette 5 màu + 2 cặp font có dấu tiếng Việt 🎨'],
-    [88, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 50, 'Cảnh 3/5'],
-    [90, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 60, 'Setup đèn 3 điểm'],
-    [92, 'chat', 'daily-report', 'cd', 'kuma', 'Kuma tổng hợp cuối ngày giúp anh nhé.'],
-    [92, 'task', 'daily-report', 'kuma', 'Báo cáo cuối ngày', 'working', 30],
-    [100, 'task', 'daily-report', 'kuma', 'Báo cáo cuối ngày', 'waiting_review', 100],
-    [100, 'chat', 'daily-report', 'kuma', 'cd', 'Báo cáo xong rồi anh 🐻 Có 2 việc chờ anh duyệt, 2 việc đang chạy. Xem ở Phòng Kuma nha.'],
-    [110, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'blocked', 70, 'Thiếu logo vector'],
-    [110, 'chat', `${P}-cup3d`, 'cube', 'cd', 'Anh ơi em cần file logo vector (SVG) của quán để gắn lên ly ạ 🙏'],
-    [120, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'waiting_review', 100],
-    [120, 'chat', `${P}-story`, 'frame', 'cd', 'Storyboard 15s xong rồi anh, có kèm file .jsx dựng sẵn comp ạ.'],
-    [126, 'chat', `${P}-headline`, 'cd', 'ink', 'Chốt headline số 1 nhé, tốt lắm.'],
-    [126, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'done', 100, 'Anh đã chốt'],
+    // [giây, 'chat', kênh, từ, đến, nội dung]
+    // [giây, 'task', id, người làm, tiêu đề, trạng thái, tiến độ, ghi chú, người giao]
+    [0, 'chat', P, 'cd', 'manager', 'Grid ơi, lo trọn gói chiến dịch "Autumn Café – ra mắt menu thu" giúp anh, tự chia cho team nhé.'],
+    [0, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 5, 'Đang đọc yêu cầu', 'cd'],
+    [3, 'chat', P, 'manager', 'cd', 'Dạ em nhận rồi anh 🧭 Em chia việc cho team ngay, xong em gom lại cho anh duyệt.'],
+    [7, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 15, 'Đang chia việc', 'cd'],
+    [9, 'chat', COMPANY, 'manager', 'team', 'Cả nhà ơi, dự án Autumn Café: Brief lên plan trước → sau đó Ink viết headline, Pixel lo visual, Frame storyboard 15s, Cube dựng ly cà phê 3D. Chi tiết ở outputs/autumn-cafe/assignments.md nha!'],
+    [9, 'chat', `${P}-brief`, 'manager', 'brief', 'Brief ơi, phân tích brief Autumn Café và lên plan giúp anh Nekoma nhé.'],
+    [9, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 5, '', 'manager'],
+    [11, 'chat', `${P}-brief`, 'brief', 'manager', 'Dạ em nhận ạ 📋'],
+    [12, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 25, 'Theo dõi team', 'cd'],
+    [17, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 55, 'Đang tách deliverable', 'manager'],
+    [24, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [24, 'chat', `${P}-brief`, 'brief', 'manager', 'Plan xong rồi Grid ơi ✨ 4 deliverable, deadline 05/11.'],
+    [28, 'chat', `${P}-headline`, 'manager', 'ink', 'Ink, viết 5 headline theo plan của Brief nhé.'],
+    [28, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 10, '', 'manager'],
+    [29, 'chat', `${P}-visual`, 'manager', 'pixel', 'Pixel, lên visual direction tông thu giúp mình.'],
+    [29, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'working', 10, '', 'manager'],
+    [30, 'chat', `${P}-story`, 'manager', 'frame', 'Frame, storyboard 15s khớp nhạc 100 BPM nhé.'],
+    [30, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 10, '', 'manager'],
+    [31, 'chat', `${P}-cup3d`, 'manager', 'cube', 'Cube, viết script Blender dựng ly cà phê xoay 360°.'],
+    [31, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 10, '', 'manager'],
+    [33, 'chat', `${P}-headline`, 'ink', 'manager', 'Dạ em vào việc liền ✍️'],
+    [34, 'chat', `${P}-visual`, 'pixel', 'manager', 'Em lên moodboard cam – nâu – kem mùa thu nha 🍂'],
+    [35, 'chat', `${P}-story`, 'frame', 'manager', 'Dạ, em chia 5 cảnh nha 🎬'],
+    [36, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 40, '4 việc đang chạy', 'cd'],
+    [40, 'chat', 'daily-report', 'cd', 'kuma', 'Kuma tổng hợp đầu ngày giúp anh nhé.'],
+    [40, 'task', 'daily-report', 'kuma', 'Báo cáo đầu ngày', 'working', 30, '', 'cd'],
+    [46, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 55, 'Bản nháp 3/5', 'manager'],
+    [50, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'working', 45, 'Chọn palette', 'manager'],
+    [52, 'task', 'daily-report', 'kuma', 'Báo cáo đầu ngày', 'waiting_review', 100, '', 'cd'],
+    [52, 'chat', 'daily-report', 'kuma', 'cd', 'Báo cáo xong rồi anh 🐻 Grid đang điều 4 bạn làm Autumn Café. Xem ở Phòng Kuma nha.'],
+    [58, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 50, 'Cảnh 3/5', 'manager'],
+    [60, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 60, 'Setup đèn 3 điểm', 'manager'],
+    [66, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [66, 'chat', COMPANY, 'ink', 'team', 'Xong 5 headline rồi nha cả nhà ☕ Em thích nhất: "Thu về, cà phê ấm tay".'],
+    [74, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'blocked', 70, 'Thiếu logo vector', 'manager'],
+    [74, 'chat', COMPANY, 'cube', 'cd', 'Anh Nekoma ơi, em cần file logo vector (SVG) của quán để gắn lên ly ạ 🙏'],
+    [80, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [80, 'chat', `${P}-visual`, 'pixel', 'manager', 'Visual direction v1 xong: palette 5 màu + 2 cặp font có dấu 🎨'],
+    [86, 'chat', COMPANY, 'cd', 'cube', '@cube anh gửi logo vào outputs/autumn-cafe/logo.svg rồi nhé.'],
+    [88, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 85, 'Gắn logo', 'manager'],
+    [96, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [102, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [104, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 85, 'Kiểm tra & tổng hợp', 'cd'],
+    [114, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'waiting_review', 100, 'Chờ anh duyệt', 'cd'],
+    [114, 'chat', P, 'manager', 'cd', 'Anh ơi, đủ 4 phần rồi ạ. Em gom ở outputs/autumn-cafe/summary.md — có 2 điểm cần anh chốt.'],
+    [124, 'chat', P, 'cd', 'manager', 'Duyệt hết nhé, team làm tốt lắm!'],
+    [124, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'done', 100, 'Anh đã duyệt', 'cd'],
+    [124, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'done', 100, 'Anh đã duyệt', 'manager'],
+    [124, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'done', 100, 'Anh đã duyệt', 'manager'],
+    [124, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'done', 100, 'Anh đã duyệt', 'manager'],
+    [124, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'done', 100, 'Anh đã duyệt', 'manager'],
+    [124, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'done', 100, 'Anh đã duyệt', 'manager'],
+    [126, 'chat', COMPANY, 'manager', 'team', 'Anh Nekoma duyệt hết rồi 🎉 Cảm ơn cả nhà!'],
   ];
 
   const start = Date.now();
   const iso = (sec) => toLocalIso(new Date(start + sec * 1000));
+  const extra = []; // tin anh gõ trong bản demo
 
   const report = {
     name: 'kuma-demo.md',
     date: new Date().toISOString().slice(0, 10),
-    content: `# Báo cáo cuối ngày 🐻\n\n**Dự án:** Autumn Café – ra mắt menu thu\n\n## Chờ anh duyệt\n- **Pixel** – Visual direction v1 (palette & type)\n- **Frame** – Storyboard video 15s\n\n## Đang chạy\n- **Cube** – Scene 3D ly cà phê 360° · *cần logo vector*\n\n## Đã xong\n- **Brief** – Phân tích brief & lên plan\n- **Ink** – 5 headline (anh đã chốt bản 1)\n\n## Đề xuất ngày mai\n1. Gửi Cube file logo SVG để mở khoá task 3D\n2. Duyệt visual direction trước 10h để Frame ráp animatic\n`,
+    content: `# Báo cáo đầu ngày 🐻\n\n**Dự án:** Autumn Café – ra mắt menu thu (Grid đang điều phối)\n\n## Đang chạy\n- **Ink** – 5 headline\n- **Pixel** – Visual direction v1\n- **Frame** – Storyboard 15s\n- **Cube** – Scene 3D ly cà phê 360°\n\n## Đã xong\n- **Brief** – Phân tích brief & lên plan\n\n## Đề xuất hôm nay\n1. Chuẩn bị sẵn logo SVG cho Cube\n2. Dành 30 phút cuối ngày duyệt bản tổng hợp của Grid\n`,
   };
 
   return {
+    post(channel, text) {
+      const m = text.match(/@([a-z]+)/i);
+      const tag = m ? m[1].toLowerCase() : '';
+      const to = tag === 'grid' ? 'manager' : AGENTS.some((a) => a.id === tag) ? tag : 'team';
+      extra.push({ channel, msg: { from: 'cd', to, text, time: toLocalIso(new Date()), via: 'office' } });
+    },
     snapshot() {
       const elapsed = ((Date.now() - start) / 1000);
       const loop = Math.floor(elapsed / LOOP);
@@ -140,7 +184,7 @@ function createDemo() {
       const base = loop * LOOP;
       const agents = {};
       const tasks = new Map();
-      const chats = {};
+      const chats = { [COMPANY]: [{ from: 'manager', to: 'team', text: 'Chào cả nhà, em là Grid — Manager của studio 🧭 Đây là kênh chat chung của cả công ty nha.', time: iso(base) }] };
       for (const a of AGENTS) agents[a.id] = { agent: a.id, state: 'idle', note: 'Chờ anh giao việc', updated: iso(base) };
       for (const ev of E) {
         const [t, kind] = ev;
@@ -150,19 +194,19 @@ function createDemo() {
           const [, , id, from, to, text] = ev;
           (chats[id] ||= []).push({ from, to, text, time });
         } else if (kind === 'task') {
-          const [, , id, who, title, state, progress, note] = ev;
-          tasks.set(id, { id, project: 'AUTUMN CAFÉ', title, assignee: who, state, progress, deadline: '2026-11-05', updated: time });
-          agents[who] = { agent: who, state, task: `AUTUMN CAFÉ · ${title}`, taskId: id, progress, note: note || '', updated: time };
-        } else if (kind === 'idle') {
-          agents[ev[2]] = { agent: ev[2], state: 'idle', note: 'Chờ anh giao việc', updated: time };
+          const [, , id, who, title, state, progress, note, by] = ev;
+          tasks.set(id, { id, project: PROJECT, title, assignee: who, state, progress, deadline: '2026-11-05', updated: time,
+            assignedBy: by, ...(by === 'manager' ? { parent: P } : {}) });
+          agents[who] = { agent: who, state, task: `${PROJECT} · ${title}`, taskId: id, progress, note: note || '', updated: time };
         }
       }
+      for (const { channel, msg } of extra) (chats[channel] ||= []).push(msg);
       return {
         studio: { name: 'NEKOMA STUDIO', tagline: 'Creative AI Production Lab' },
         agents,
         tasks: [...tasks.values()],
         chats,
-        reports: T >= 100 ? [report] : [],
+        reports: T >= 52 ? [report] : [],
       };
     },
   };

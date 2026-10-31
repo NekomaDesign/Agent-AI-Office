@@ -1,18 +1,19 @@
 # NEKOMA STUDIO · Agent Office 3D
 
 Studio sáng tạo chạy bằng các AI agent trong **Claude Code**, kèm một **văn phòng 3D** hiển thị trực tiếp ai đang làm gì.
-Creative Director là **Nekoma** (người thật). Agent nào được anh giao việc thì người đó mới làm.
+Creative Director là **Nekoma** (người thật). Anh giao thẳng cho từng người, hoặc giao **Grid** (Manager) để Grid tự chia việc cho team.
 
-| Khu | Agent | Vai trò |
+Văn phòng gồm 5 "đảo" lơ lửng nối bằng cầu. Khi một khu có người đang làm, các hạt sáng chạy trên cầu từ đảo điều phối sang khu đó.
+
+| Khu | Ai ngồi | Vai trò |
 |---|---|---|
-| A | **Brief** | Nhận brief & lên plan (chỉ đề xuất phân công) |
-| B | **Nekoma** | Creative Director — tầng lửng |
-| C | **Pixel** | Designer 2D — phòng kính |
-| D | **Cube** | Designer 3D — script Blender |
-| E | **Frame** | Motion Designer — storyboard, script After Effects |
-| F | **Ink** | Content / Copywriter |
-| G | **Kuma** 🐻 | Trợ lý cá nhân — báo cáo, deadline |
-| H | — | Phòng hội thoại |
+| A · Tầng chỉ huy | **Nekoma** · **Kuma** 🐻 | Creative Director + trợ lý cá nhân |
+| B · Đảo điều phối | **Grid** 🧭 | Manager — chỉ dưới quyền anh, nhận việc lớn rồi chia lại cho team |
+| C · Phòng chữ | **Brief** · **Ink** | Nhận brief & plan · Content / Copywriter |
+| D · Xưởng hình | **Pixel** · **Cube** · **Frame** | Designer 2D · 3D · Motion (mỗi người một phòng kính) |
+| E · Quảng trường chat | — | Chat chung của cả công ty |
+
+Sơ đồ: **Nekoma → Grid → Brief, Ink, Pixel, Cube, Frame**. Kuma chỉ nhận việc từ anh.
 
 ---
 
@@ -40,23 +41,36 @@ cd Z:\DAI_WORKSPACE\Agent-AI-Office
 claude
 ```
 
-Rồi gọi tên người cần giao:
+Giao trọn gói cho Manager — Grid chia việc, gọi từng bạn làm, rồi gom kết quả về cho anh duyệt:
+
+```
+Grid ơi, lo trọn gói chiến dịch này giúp anh, tự chia cho team nhé: <dán brief>
+```
+
+Hoặc gọi thẳng tên từng người:
 
 ```
 Brief ơi, phân tích brief này và lên plan giúp anh: <dán brief>
 Ink ơi, viết 5 headline cho task autumn-cafe
-Pixel ơi, làm visual direction cho task autumn-cafe
 Kuma ơi, làm báo cáo đầu ngày cho anh
 ```
 
-Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 giây, nhân vật chuyển sang **ĐANG LÀM**, tin nhắn hiện ở **Phòng hội thoại**.
+Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 giây, nhân vật chuyển sang **ĐANG LÀM**, tin nhắn hiện ở **Chat công ty**.
+
+**Bấm vào bất kỳ nhân viên nào** (trong văn phòng 3D hoặc danh sách bên phải) để mở hồ sơ: việc đang làm, tiến độ, việc gần đây, tin nhắn, lệnh mẫu.
+
+### Chat công ty
+
+Tab **Chat công ty** giống Slack: kênh `# chung` cho cả công ty, mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
+Anh gõ tin ngay trong văn phòng (Enter để gửi, `@Grid`, `@Ink`… để gọi tên). Tin được lưu vào `.studio/chat/company.jsonl`.
+Agent không tự đọc tin, nên sau khi nhắn, anh nói trong Claude Code: `xem chat chung và trả lời giúp anh`.
 Sản phẩm nằm trong `outputs/<tên-task>/`. Khi anh nói "duyệt" hoặc "ok", agent chuyển sang **ĐÃ XONG**.
 
 ## Cấu trúc
 
 ```
 CLAUDE.md            luật làm việc + giao thức ghi trạng thái (agent đọc file này)
-.claude/agents/      định nghĩa 6 agent
+.claude/agents/      định nghĩa 7 agent (manager = Grid)
 .studio/             trạng thái sống: status/, tasks.json, chat/, reports/
 outputs/             sản phẩm của agent
 office/              văn phòng 3D (Three.js) + server.mjs
