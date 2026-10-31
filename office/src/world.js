@@ -194,6 +194,103 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
     stations[person.id] = buildStation(person, STATIONS[person.id], world, onSelect);
   }
 
+  // ---------- đi lại trao đổi công việc ----------
+  // Có tin nhắn A → B: A đứng dậy, đi (qua cầu nếu khác đảo) tới cạnh bàn B, nói, rồi về chỗ.
+  // Tin gửi cả team: ra Quảng trường chat nói.
+  const LIFT = 0.42; // ngồi → đứng thì nhấc người lên cho chân chạm sàn
+  const SPEED = 2.6;
+  const walkers = {};
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const onStation = (id, x, z) => stations[id].root.localToWorld(V(x, 0, z));
+  const standPoint = (id) => onStation(id, 0, 0.85); // sau ghế
+  const visitPoint = (id) => onStation(id, 1.15, 0.3); // cạnh bàn người nhận
+  const D = ISLANDS.D, AISLE_Z = D.z + D.d / 2 - 0.85, RIGHT_X = D.x + D.w / 2 - 0.35;
+  // lối ra khỏi đảo, tránh đi xuyên tường kính / bàn
+  function exitVia(zone, p) {
+    if (zone === 'D') return [V(p.x, 0, AISLE_Z), V(RIGHT_X, 0, AISLE_Z), V(RIGHT_X, 0, D.z - D.d / 2 + 0.45)];
+    if (zone === 'A' && p.x > 7) return [V(7.6, ISLANDS.A.y, -7.6), V(7.6, ISLANDS.A.y, ISLANDS.A.z + 1.8)];
+    return [];
+  }
+  function route(fromZone, p, toZone, q) {
+    if (fromZone === toZone) {
+      return fromZone === 'D' ? [p, V(p.x, 0, AISLE_Z), V(q.x, 0, AISLE_Z), q] : [p, q];
+    }
+    const pts = [p, ...exitVia(fromZone, p)];
+    if (fromZone !== 'B') pts.push(bridges[fromZone].islandEnd.clone(), bridges[fromZone].hubEnd.clone());
+    if (toZone !== 'B') pts.push(bridges[toZone].hubEnd.clone(), bridges[toZone].islandEnd.clone());
+    pts.push(...exitVia(toZone, q).reverse(), q);
+    return pts;
+  }
+  const yawTo = (dx, dz) => Math.atan2(-dx, -dz);
+
+  function visit(from, to, text) {
+    const s = stations[from];
+    const w = (walkers[from] ||= { phase: 'seated', queue: [] });
+    if (w.phase !== 'seated') {
+      if (w.queue.length < 3) w.queue.push([to, text]); else s.say(text);
+      return;
+    }
+    let q, toZone, face;
+    if (to === 'team') {
+      const E = ISLANDS.E, k = Object.keys(STATIONS).indexOf(from);
+      toZone = 'E'; q = V(E.x - 1.2 + (k % 4) * 0.7, E.y, E.z + 0.6 + Math.floor(k / 4) * 0.7);
+      face = V(E.x + 0.2, E.y, E.z - 1.5); // nhìn về màn hình chat
+    } else {
+      toZone = PEOPLE[to].zone; q = visitPoint(to);
+      face = stations[to].root.getWorldPosition(V(0, 0, 0));
+    }
+    const p = standPoint(from);
+    const path = route(PEOPLE[from].zone, p, toZone, q);
+    const seat = s.root.getWorldPosition(V(0, 0, 0));
+    world.attach(s.ch.group);
+    Object.assign(w, {
+      phase: 'go', pts: path, i: 0, text, face, lift: 0, target: to,
+      back: [...path].reverse().concat([seat]),
+      pos: s.ch.group.position.clone(), yaw: s.ch.group.rotation.y,
+    });
+    s.setPose('walk');
+  }
+
+  function tickWalkers(dt) {
+    for (const [id, w] of Object.entries(walkers)) {
+      if (w.phase === 'seated') continue;
+      const s = stations[id], g = s.ch.group;
+      let wantYaw = w.yaw;
+      if (w.phase === 'talk') {
+        w.wait -= dt;
+        wantYaw = yawTo(w.face.x - w.pos.x, w.face.z - w.pos.z);
+        if (w.wait <= 0) { w.phase = 'back'; w.pts = w.back; w.i = 0; s.setPose('walk'); }
+      } else {
+        const target = w.pts[w.i];
+        const d = target.clone().sub(w.pos);
+        const dist = d.length(), step = SPEED * dt;
+        if (Math.hypot(d.x, d.z) > 0.01) wantYaw = yawTo(d.x, d.z);
+        if (dist <= step) {
+          w.pos.copy(target); w.i++;
+          if (w.i >= w.pts.length) {
+            if (w.phase === 'go') {
+              w.phase = 'talk'; w.wait = 4.5; s.setPose('stand'); s.say(w.text);
+            } else {
+              // về tới ghế: ngồi lại vào bàn
+              s.root.attach(g); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+              s.setPose('sit'); w.phase = 'seated';
+              const next = w.queue.shift();
+              if (next) visit(id, ...next);
+              continue;
+            }
+          }
+        } else w.pos.addScaledVector(d, step / dist);
+      }
+      // ngồi xuống ở đoạn cuối đường về, còn lại thì đứng
+      const sitting = w.phase === 'back' && w.i === w.pts.length - 1;
+      w.lift += ((sitting ? 0 : LIFT) - w.lift) * Math.min(1, dt * 8);
+      let dy = wantYaw - w.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      w.yaw += dy * Math.min(1, dt * 10);
+      g.position.set(w.pos.x, w.pos.y + w.lift, w.pos.z);
+      g.rotation.set(0, w.yaw, 0);
+    }
+  }
+
   // ---------- chọn bằng click trên mô hình ----------
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -278,7 +375,15 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
         bridges[z.id].setActive(active);
       }
     },
-    say(id, text) { stations[id] && stations[id].say(text); },
+    // nói với ai đó: đi tới chỗ người nhận nếu được, không thì chỉ hiện bong bóng tại chỗ
+    say(id, text, to) {
+      if (!stations[id]) return;
+      const here = (a, b) => walkers[a]?.phase === 'talk' && walkers[a].target === b; // a đang đứng nói chuyện ở chỗ b
+      if (here(to, id)) { stations[id].say(text); walkers[to].wait = Math.max(walkers[to].wait, 3); return; } // người kia đang đứng cạnh mình → trả lời tại chỗ
+      if (here(id, to)) { stations[id].say(text); walkers[id].wait += 2.5; return; } // mình đang ở chỗ người đó rồi
+      if (to && to !== id && (stations[to] || to === 'team')) visit(id, to, text);
+      else stations[id].say(text);
+    },
     setPaused(p) { paused = p; labels.domElement.style.visibility = p ? 'hidden' : 'visible'; },
   };
 
@@ -316,6 +421,7 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
     controls.update();
     if (paused) return;
     for (const f of tickers) f(t, dt);
+    tickWalkers(dt);
     for (const s of Object.values(stations)) s.tick(t, dt);
     for (const b of Object.values(bridges)) b.tick(t);
     board.tick(t);
@@ -492,7 +598,7 @@ function buildIslands(world, tickers) {
     const a = edgePoint(hub, dir).add(dir.clone().multiplyScalar(-0.3));
     const b = edgePoint(c, dir.clone().negate()).add(dir.clone().multiplyScalar(0.3));
     a.y = hub.y; b.y = c.y;
-    bridges[k] = buildBridge(world, a, b, ZONES[k].color);
+    bridges[k] = Object.assign(buildBridge(world, a, b, ZONES[k].color), { hubEnd: a, islandEnd: b });
   }
 
   // Bóng nền phía dưới (cho cảm giác các đảo đang lơ lửng)
@@ -1089,7 +1195,9 @@ function buildStation(person, cfg, world, onSelect) {
 
   // Nhân vật
   const ch = makeCharacter(person);
+  ch.group.userData.personId = person.id; // vẫn bấm được khi đang đi ngoài bàn
   root.add(ch.group);
+  let pose = 'sit';
 
   // Nhãn (thẻ kính nổi)
   const tag = document.createElement('button');
@@ -1101,14 +1209,14 @@ function buildStation(person, cfg, world, onSelect) {
   tag.addEventListener('click', (e) => { e.stopPropagation(); onSelect(person.id); });
   const tagObj = new CSS2DObject(tag);
   tagObj.position.set(0, 2.35, -0.2);
-  root.add(tagObj);
+  ch.group.add(tagObj); // thẻ tên + bong bóng đi theo người
 
   // Bong bóng thoại
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   const bubbleObj = new CSS2DObject(bubble);
   bubbleObj.position.set(0, 3.45, -0.2);
-  root.add(bubbleObj);
+  ch.group.add(bubbleObj);
   let bubbleTimer = null;
 
   let status = { state: 'idle' };
@@ -1170,11 +1278,13 @@ function buildStation(person, cfg, world, onSelect) {
     // màn hình
     if (st === 'working' && t - scrLast > 0.15) { scrLast = t; drawScreen(t); }
     else if (scrLast < 0) { scrLast = 0; drawScreen(t); }
-    ch.animate(st, t + seed, dt);
+    ch.animate(st, t + seed, dt, pose);
   }
 
   return {
     root,
+    ch,
+    setPose(p) { pose = p; },
     setStatus,
     tick,
     setSelected(on) { tag.classList.toggle('selected', on); },
@@ -1260,10 +1370,16 @@ function makeCharacter(person) {
   const pants = M(P.pants, { roughness: 0.85 });
   const hairM = M(hairCols[person.id] || '#2a211c', { roughness: 0.9 });
 
+  // Chân có khớp hông + gối để vừa ngồi vừa đứng/đi được (ngồi: hông π/2, gối -π/2)
+  const legs = {};
   for (const s of [-1, 1]) {
-    const thigh = capsule(0.095, 0.36, pants); thigh.rotation.x = Math.PI / 2; thigh.position.set(s * 0.12, 0.64, -0.18); g.add(thigh);
-    const shin = capsule(0.085, 0.36, pants); shin.position.set(s * 0.12, 0.33, -0.42); g.add(shin);
-    const shoe = box(0.15, 0.1, 0.26, person.hair === 'duck' ? '#f39a2b' : '#f4f1ea', { r: 0.04 }); put(shoe, s * 0.12, 0, -0.47); g.add(shoe);
+    const hip = new THREE.Group(); hip.position.set(s * 0.12, 0.64, 0); g.add(hip);
+    const thigh = capsule(0.095, 0.36, pants); thigh.position.y = -0.2; hip.add(thigh);
+    const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
+    const shin = capsule(0.085, 0.36, pants); shin.position.y = -0.27; knee.add(shin);
+    const shoe = box(0.15, 0.1, 0.26, person.hair === 'duck' ? '#f39a2b' : '#f4f1ea', { r: 0.04 }); shoe.position.set(0, -0.64, -0.05); knee.add(shoe);
+    hip.rotation.x = Math.PI / 2; knee.rotation.x = -Math.PI / 2;
+    legs[s] = { hip, knee };
   }
   const body = new THREE.Group(); body.position.set(0, 0.6, 0.04); g.add(body);
   const torso = capsule(0.21, 0.32, shirt); torso.position.y = 0.38; torso.scale.set(1, 1, 0.8); body.add(torso);
@@ -1323,14 +1439,25 @@ function makeCharacter(person) {
   }
 
   // Tư thế mục tiêu theo trạng thái
-  const cur = { shX: [0.3, 0.3], shZ: [0, 0], elX: [1.0, 1.0], headX: 0, headY: 0, lean: 0 };
+  const cur = { shX: [0.3, 0.3], shZ: [0, 0], elX: [1.0, 1.0], headX: 0, headY: 0, lean: 0, hip: [Math.PI / 2, Math.PI / 2], knee: [-Math.PI / 2, -Math.PI / 2] };
   const lerp = (a, b, k) => a + (b - a) * k;
 
   return {
     group: g,
-    animate(state, t, dt) {
-      const tgt = { shX: [0.3, 0.3], shZ: [0, 0], elX: [1.0, 1.0], headX: 0.05, headY: 0, lean: 0 };
-      if (state === 'working') {
+    // pose: 'sit' (ngồi bàn) · 'walk' (đang đi) · 'stand' (đứng nói chuyện)
+    animate(state, t, dt, pose = 'sit') {
+      const tgt = { shX: [0.3, 0.3], shZ: [0, 0], elX: [1.0, 1.0], headX: 0.05, headY: 0, lean: 0, hip: [Math.PI / 2, Math.PI / 2], knee: [-Math.PI / 2, -Math.PI / 2] };
+      if (pose === 'walk') {
+        const w = Math.sin(t * 9);
+        tgt.hip = [w * 0.55, -w * 0.55];
+        tgt.knee = [-Math.max(0, -w) * 0.9, -Math.max(0, w) * 0.9];
+        tgt.shX = [-w * 0.5, w * 0.5]; tgt.elX = [0.35, 0.35];
+        tgt.headX = 0; tgt.lean = -0.05;
+      } else if (pose === 'stand') {
+        tgt.hip = [0, 0]; tgt.knee = [0, 0];
+        tgt.shX = [0.05, -0.35 + Math.sin(t * 4) * 0.18]; tgt.elX = [0.2, 0.9 + Math.sin(t * 5) * 0.2];
+        tgt.headX = -0.05 + Math.sin(t * 3) * 0.04; tgt.headY = Math.sin(t * 1.3) * 0.12;
+      } else if (state === 'working') {
         tgt.shX = [0.32, 0.32];
         tgt.elX = [1.05 + Math.sin(t * 17) * 0.09, 1.05 + Math.sin(t * 17 + 1.7) * 0.09];
         tgt.headX = 0.12 + Math.sin(t * 2.3) * 0.03;
@@ -1352,21 +1479,26 @@ function makeCharacter(person) {
         tgt.headX = -0.2; tgt.lean = 0.2;
       }
       const k = 1 - Math.pow(0.002, dt);
+      const kLeg = pose === 'walk' ? 1 - Math.pow(0.00001, dt) : k; // bước chân theo nhịp, không trễ
       [-1, 1].forEach((s, i) => {
-        // i=0: tay trái (s=-1), i=1: tay phải (s=1)
-        cur.shX[i] = lerp(cur.shX[i], tgt.shX[i], k);
+        // i=0: tay/chân trái (s=-1), i=1: tay/chân phải (s=1)
+        cur.shX[i] = lerp(cur.shX[i], tgt.shX[i], kLeg);
         cur.shZ[i] = lerp(cur.shZ[i], tgt.shZ[i], k);
         cur.elX[i] = lerp(cur.elX[i], tgt.elX[i], k);
         arms[s].sh.rotation.x = cur.shX[i];
         arms[s].sh.rotation.z = cur.shZ[i];
         arms[s].el.rotation.x = cur.elX[i];
+        cur.hip[i] = lerp(cur.hip[i], tgt.hip[i], kLeg);
+        cur.knee[i] = lerp(cur.knee[i], tgt.knee[i], kLeg);
+        legs[s].hip.rotation.x = cur.hip[i];
+        legs[s].knee.rotation.x = cur.knee[i];
       });
       cur.headX = lerp(cur.headX, tgt.headX, k);
       cur.headY = lerp(cur.headY, tgt.headY, k);
       cur.lean = lerp(cur.lean, tgt.lean, k);
       head.rotation.x = cur.headX; head.rotation.y = cur.headY;
       body.rotation.x = cur.lean;
-      body.position.y = 0.6 + Math.sin(t * 1.6) * 0.006;
+      body.position.y = 0.6 + (pose === 'walk' ? Math.abs(Math.sin(t * 9)) * 0.03 : Math.sin(t * 1.6) * 0.006);
     },
   };
 }

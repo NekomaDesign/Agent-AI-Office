@@ -167,7 +167,7 @@ export function createUI({ world, send, order, newSession }) {
     // bong bóng thoại khi có tin mới
     const msgs = allMessages(d.chats);
     const keyOf = (m) => `${m.taskId}|${m.time}|${m.from}|${m.text.slice(0, 20)}`;
-    if (prevMsgKeys) for (const m of msgs) if (!prevMsgKeys.has(keyOf(m))) world.say(m.from, m.text);
+    if (prevMsgKeys) for (const m of msgs) if (!prevMsgKeys.has(keyOf(m))) world.say(m.from, m.text, m.to);
     prevMsgKeys = new Set(msgs.map(keyOf));
 
     world.update(d);
