@@ -1,5 +1,6 @@
 // Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Lue, toast.
 import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY, ORDERS } from './agents.js';
+import { FILE_RE, filesOf, attachHtml, hydrate, openViewer, openModal, md } from './files.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,9 +28,10 @@ const pill = (s) => { const st = STATES[s] || STATES.idle; return `<span class="
 // tô sáng @tên trong tin nhắn
 const richText = (t) => esc(t).replace(/@([a-zà-ỹ]+)/gi, (m, n) => {
   const id = n.toLowerCase() === 'grid' ? 'manager' : n.toLowerCase();
+  if (id === 'all' || id === 'team') return '<span class="mention" style="--c:#1d1c19">@all</span>';
   const p = PEOPLE[id];
   return p ? `<span class="mention" style="--c:${p.color}">@${esc(p.name)}</span>` : m;
-});
+}).replace(FILE_RE, (p) => `<button type="button" class="fpath" data-file="${p}">${p}</button>`);
 
 function allMessages(chats) {
   const out = [];
@@ -40,7 +42,7 @@ function allMessages(chats) {
 // ======================================================================
 const elapsed = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-export function createUI({ world, send, order, newSession }) {
+export function createUI({ world, send, order, newSession, openFolder }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -87,6 +89,82 @@ export function createUI({ world, send, order, newSession }) {
     renderProfile();
   }
   function closeProfile() { profileId = null; $('#profile').hidden = true; }
+
+  // ---- file & duyệt việc: bấm ở đâu cũng được (chat, bảng việc, hồ sơ, cửa sổ xem) ----
+  document.addEventListener('click', async (e) => {
+    const v = e.target.closest('[data-file]');
+    if (v) { e.preventDefault(); openViewer(v.dataset.file); return; }
+    const o = e.target.closest('[data-open]');
+    if (o) {
+      e.preventDefault();
+      try { await openFolder(o.dataset.open); miniToast('📂 Đã mở thư mục trên máy anh'); }
+      catch (err) { miniToast(`Chưa mở được thư mục: ${err.message}`, true); }
+      return;
+    }
+    const r = e.target.closest('[data-review]');
+    if (r) { e.preventDefault(); openTaskReview(r.dataset.review); }
+  });
+  function miniToast(text, err) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.style.setProperty('--c', err ? '#d93a2b' : '#2f9a5c');
+    el.textContent = text;
+    $('#toasts').appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  // ---- Xem & duyệt bản cuối: anh chỉ duyệt việc Grid gửi lên, góp ý cũng gửi qua Grid ----
+  function openTaskReview(id) {
+    const t = data?.tasks.find((x) => x.id === id);
+    if (!t) return;
+    const kids = data.tasks.filter((x) => x.parent === t.id);
+    const p = PEOPLE[t.assignee] || { name: t.assignee, color: '#999' };
+    const sent = (data.chats[t.id] || []).filter((m) => m.from !== 'cd').flatMap(filesOf);
+    const dirs = [`outputs/${t.id}/`, ...kids.map((k) => `outputs/${k.id}/`)];
+    const files = [...new Set([...sent.filter((f) => !dirs.some((d) => f.startsWith(d))), ...dirs])];
+    const final = t.state === 'waiting_review';
+    const can = runnerStatus().ok;
+    // việc của Lue (trợ lý riêng) gửi thẳng Lue, còn lại đều qua Grid
+    const boss = t.assignee === 'lue' ? 'Lue' : 'Grid';
+    const note = final ? '' : t.state === 'manager_review'
+      ? '<p class="review-note">Grid đang duyệt phần này — anh chưa cần làm gì, khi đạt Grid sẽ gửi anh bản cuối.</p>'
+      : t.state === 'done' ? '<p class="review-note ok">Việc này đã được duyệt xong.</p>' : '<p class="review-note">Việc đang làm — anh xem tạm các file đã có.</p>';
+    const body = openModal(`<div class="review">
+      <div class="review-head"><div><span class="proj">${esc(t.project || '')}</span><h3>${esc(t.title || t.id)}</h3>
+        <small><span class="person" style="--c:${p.color}"><i></i>${esc(p.name)}</span> · ${t.assignedBy === 'manager' ? 'Grid giao' : 'Anh giao'} · cập nhật ${timeAgo(t.updated)}</small></div>${pill(t.state)}</div>
+      ${kids.length ? `<div class="review-kids">${kids.map((k) => `<span>${pill(k.state)} ${esc(PEOPLE[k.assignee]?.name || k.assignee)} — ${esc(k.title || k.id)}</span>`).join('')}</div>` : ''}
+      ${note}
+      ${attachHtml(files)}
+      ${final ? `<div class="review-act">
+        <button type="button" class="btn btn-dark" id="rv-ok" ${can ? '' : 'disabled'}>✓ Duyệt bản cuối</button>
+        <textarea id="rv-text" rows="3" placeholder="Góp ý cho bản cuối… ${boss === 'Grid' ? 'Grid sẽ chuyển cho đúng bạn sửa rồi gửi lại anh' : 'Lue sẽ sửa rồi gửi lại anh'}"></textarea>
+        <button type="button" class="btn" id="rv-fb" ${can ? '' : 'disabled'}>Gửi góp ý cho ${boss}</button>
+        <small class="hint" id="rv-hint">${can ? (boss === 'Grid' ? 'Duyệt hay góp ý đều gửi cho Grid — Grid chốt với cả team.' : 'Việc của Lue — duyệt hay góp ý gửi thẳng Lue.') : esc(runnerStatus().text || 'Chưa gửi được lúc này')}</small>
+      </div>` : ''}
+    </div>`, true);
+    if (!final) return;
+    const done = (msg) => { body.querySelector('.review-act').innerHTML = `<p class="review-note ok">${esc(msg)}</p>`; };
+    body.querySelector('#rv-ok').addEventListener('click', async () => {
+      try {
+        await order(boss === 'Grid'
+          ? `Grid ơi, anh duyệt bản cuối "${t.title || t.id}" (task ${t.id}) rồi nhé. Em chốt done cho task và các việc con, cảm ơn team giúp anh.`
+          : `Lue ơi, anh duyệt "${t.title || t.id}" (task ${t.id}) rồi nhé, em chuyển sang done giúp anh.`);
+        done(`Đã gửi duyệt cho ${boss} ✓`);
+      }
+      catch (err) { body.querySelector('#rv-hint').textContent = `Chưa gửi được: ${err.message}`; }
+    });
+    body.querySelector('#rv-fb').addEventListener('click', async () => {
+      const fb = body.querySelector('#rv-text').value.trim();
+      if (!fb) { body.querySelector('#rv-text').focus(); return; }
+      try {
+        await order(boss === 'Grid'
+          ? `Grid ơi, anh góp ý bản cuối "${t.title || t.id}" (task ${t.id}):\n${fb}\n\nEm chuyển cho đúng bạn sửa, duyệt lại rồi gửi anh bản mới nhé.`
+          : `Lue ơi, anh góp ý "${t.title || t.id}" (task ${t.id}):\n${fb}\n\nEm sửa rồi gửi lại anh nhé.`);
+        done(boss === 'Grid' ? 'Đã gửi góp ý cho Grid — Grid sẽ chuyển cho team sửa.' : 'Đã gửi góp ý cho Lue.');
+      }
+      catch (err) { body.querySelector('#rv-hint').textContent = `Chưa gửi được: ${err.message}`; }
+    });
+  }
 
   // ---- giao việc thật (Claude Code chạy nền) ----
   let flash = null; // { text, err, until }
@@ -223,16 +301,20 @@ export function createUI({ world, send, order, newSession }) {
     $('#side-chat').addEventListener('click', () => setView('chat'));
 
     // Hôm nay của anh
-    const waiting = byState('waiting_review'), working = byState('working'), blocked = byState('blocked');
+    const working = byState('working'), blocked = byState('blocked');
+    const finals = data.tasks.filter((t) => t.state === 'waiting_review' && !t.parent);
+    const gridReview = data.tasks.filter((t) => t.state === 'manager_review');
     const line = (list, f) => list.length ? list.map(f).join('') : '<span class="hint">Không có</span>';
+    const taskLink = (t) => `<button class="link" data-review="${esc(t.id)}"><b>${esc(PEOPLE[t.assignee]?.name || t.assignee)}</b> — ${esc(t.title || t.id)}</button>`;
     $('#detail').innerHTML = `<div class="section-title" style="margin-top:0">HÔM NAY CỦA ANH</div>
       <dl class="kv">
-        <dt>CHỜ DUYỆT</dt><dd>${line(waiting, (a) => `<button class="link" data-id="${a.id}"><b>${esc(a.name)}</b> — ${esc(data.agents[a.id].task || '')}</button>`)}</dd>
+        <dt>BẢN CUỐI CHỜ ANH</dt><dd>${line(finals, taskLink)}</dd>
+        <dt>GRID ĐANG DUYỆT</dt><dd>${line(gridReview, taskLink)}</dd>
         <dt>ĐANG LÀM</dt><dd>${line(working, (a) => `<button class="link" data-id="${a.id}">${esc(a.name)}</button> `)}</dd>
         <dt>CẦN HỖ TRỢ</dt><dd>${line(blocked, (a) => `<button class="link" data-id="${a.id}"><b>${esc(a.name)}</b> — ${esc(data.agents[a.id].note)}</button>`)}</dd>
       </dl>
-      <p class="hint">Bấm vào một nhân viên (trong văn phòng hoặc danh sách) để xem hồ sơ. Việc lớn cứ giao <b>Grid</b>, Grid tự chia cho team.</p>`;
-    $('#detail').querySelectorAll('.link').forEach((b) => b.addEventListener('click', () => select(b.dataset.id)));
+      <p class="hint">Bấm vào một nhân viên (trong văn phòng hoặc danh sách) để xem hồ sơ. Việc lớn cứ giao <b>Grid</b>, Grid tự chia cho team và duyệt trước, anh chỉ nhận bản cuối.</p>`;
+    $('#detail').querySelectorAll('.link[data-id]').forEach((b) => b.addEventListener('click', () => select(b.dataset.id)));
   }
 
   function renderProfile() {
@@ -248,7 +330,8 @@ export function createUI({ world, send, order, newSession }) {
     const people = (ids) => ids.map((id) => `<button class="chip-person" data-id="${id}" style="--c:${PEOPLE[id].color}">${face(id)} ${esc(PEOPLE[id].name)}</button>`).join('');
 
     if (p.human) {
-      const waiting = byState('waiting_review');
+      const finals = data.tasks.filter((t) => t.state === 'waiting_review' && !t.parent);
+      const gridReview = data.tasks.filter((t) => t.state === 'manager_review');
       box.innerHTML = head + `<p class="pf-desc">${esc(p.desc)}</p>
         <div class="pf-block"><h4>SƠ ĐỒ ĐỘI NGŨ</h4>
           <div class="org">
@@ -256,7 +339,8 @@ export function createUI({ world, send, order, newSession }) {
             <div class="org-row two"><button class="org-node" data-id="manager" style="--c:${PEOPLE.manager.color}">🧭 Grid · Manager</button><button class="org-node" data-id="lue" style="--c:${PEOPLE.lue.color}">🦆 Lue · Trợ lý</button></div>
             <div class="org-row">${people(AGENTS.filter((a) => a.reportsTo === 'manager').map((a) => a.id))}</div>
           </div></div>
-        <div class="pf-block"><h4>CHỜ ANH DUYỆT · ${waiting.length}</h4>${waiting.length ? waiting.map((a) => `<button class="pf-task" data-id="${a.id}">${avatar(a.id, 'sm')}<span><b>${esc(a.name)}</b><small>${esc(data.agents[a.id].task)}</small></span></button>`).join('') : '<p class="hint">Không có việc nào chờ anh.</p>'}</div>`;
+        <div class="pf-block"><h4>BẢN CUỐI CHỜ ANH DUYỆT · ${finals.length}</h4>${finals.length ? finals.map((t) => `<button class="pf-task" data-review="${esc(t.id)}">${avatar(t.assignee, 'sm')}<span><b>${esc(t.title || t.id)}</b><small>Grid đã duyệt · bấm để xem file & duyệt</small></span></button>`).join('') : '<p class="hint">Không có bản cuối nào chờ anh.</p>'}</div>
+        <div class="pf-block"><h4>GRID ĐANG DUYỆT · ${gridReview.length}</h4>${gridReview.length ? gridReview.map((t) => `<button class="pf-task" data-review="${esc(t.id)}">${avatar(t.assignee, 'sm')}<span><b>${esc(t.title || t.id)}</b><small>${esc(PEOPLE[t.assignee]?.name || '')} đã nộp · anh chưa cần làm gì</small></span></button>`).join('') : '<p class="hint">Grid không có bài nào đang chờ duyệt.</p>'}</div>`;
     } else {
       const s = data.agents[p.id];
       const st = STATES[s.state];
@@ -272,13 +356,13 @@ export function createUI({ world, send, order, newSession }) {
           <div class="bar" style="--c:${st.color}"><span><b style="width:${s.progress}%"></b></span>${s.progress}%</div>
           ${s.note ? `<small>${esc(s.note)}</small>` : ''}
         </div>
-        <div class="pf-stats"><div><b>${mine.length}</b><small>VIỆC</small></div><div><b>${cnt('working')}</b><small>ĐANG LÀM</small></div><div><b>${cnt('waiting_review')}</b><small>CHỜ DUYỆT</small></div><div><b>${cnt('done')}</b><small>XONG</small></div></div>
+        <div class="pf-stats"><div><b>${mine.length}</b><small>VIỆC</small></div><div><b>${cnt('working')}</b><small>ĐANG LÀM</small></div><div><b>${cnt('manager_review') + cnt('waiting_review')}</b><small>CHỜ DUYỆT</small></div><div><b>${cnt('done')}</b><small>XONG</small></div></div>
         <dl class="kv"><dt>BÁO CÁO CHO</dt><dd>${boss}</dd><dt>NHẬN VIỆC TỪ</dt><dd>${p.reportsTo === 'manager' ? 'Anh Nekoma hoặc Grid' : 'Chỉ anh Nekoma'}</dd></dl>
         ${team}
         <div class="pf-block"><h4>VIỆC GẦN ĐÂY</h4>${mine.length ? mine.slice(0, 5).map((t) => `<div class="pf-row"><span>${esc(t.title || t.id)}<small>${t.assignedBy === 'manager' ? '← Grid giao' : '← Anh giao'} · ${timeAgo(t.updated)}</small></span>${pill(t.state)}</div>`).join('') : '<p class="hint">Chưa có việc nào.</p>'}</div>
         <div class="pf-block"><h4>TIN NHẮN GẦN ĐÂY</h4>${msgs.length ? msgs.map((m) => `<div class="pf-msg"><small><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))} · ${hhmm(m.time)}</small><p>${richText(m.text)}</p></div>`).join('') : '<p class="hint">Chưa có tin nhắn.</p>'}</div>
         <div class="order-box"><header>LỆNH MẪU · DÁN VÀO CLAUDE CODE <button id="copy-order">COPY</button></header><pre>${esc(p.order)}</pre></div>
-        <div class="pf-actions"><button class="btn btn-dark" id="pf-dm">Nhắn @${esc(p.name)} trong chat chung</button></div>`;
+        <div class="pf-actions"><button class="btn btn-dark" id="pf-dm">Nhắn @${esc(p.name)} trong # all</button></div>`;
       $('#copy-order').addEventListener('click', async (e) => {
         try { await navigator.clipboard.writeText(p.order); e.target.textContent = 'ĐÃ COPY'; } catch { e.target.textContent = 'LỖI'; }
         setTimeout(() => (e.target.textContent = 'COPY'), 1500);
@@ -295,7 +379,7 @@ export function createUI({ world, send, order, newSession }) {
     const last = msgs.slice(-3).reverse();
     $('#mini-list').innerHTML = last.length ? last.map((m) => {
       const p = PEOPLE[m.from] || { color: '#888' };
-      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># chung</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p></div></li>`;
+      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># all</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p>${filesOf(m).length ? `<small class="mini-files">📎 ${filesOf(m).length} tệp — mở Chat công ty để xem</small>` : ''}</div></li>`;
     }).join('') : '<li class="mini-empty">Chưa có tin nhắn nào.</li>';
   }
 
@@ -313,13 +397,14 @@ export function createUI({ world, send, order, newSession }) {
     for (const t of all) counts[t.state] = (counts[t.state] || 0) + 1;
     const head = `<div class="ov-head"><div><div class="ov-eyebrow">${esc(data.studio.name)} · BẢNG CÔNG VIỆC</div><h2>Việc trong studio</h2></div>
       <div class="count-row">${Object.entries(STATES).map(([k, s]) => `<span class="count" style="--c:${s.color}"><i></i>${s.label} · ${counts[k] || 0}</span>`).join('')}</div></div>`;
-    const body = tasks.length ? `<div class="table-wrap"><table><thead><tr><th>VIỆC</th><th>NGƯỜI LÀM</th><th>GIAO BỞI</th><th>TRẠNG THÁI</th><th>TIẾN ĐỘ</th><th>DEADLINE</th><th>CẬP NHẬT</th></tr></thead><tbody>
+    const body = tasks.length ? `<div class="table-wrap"><table><thead><tr><th>VIỆC</th><th>NGƯỜI LÀM</th><th>GIAO BỞI</th><th>TRẠNG THÁI</th><th>TIẾN ĐỘ</th><th>DEADLINE</th><th>CẬP NHẬT</th><th>TỆP · DUYỆT</th></tr></thead><tbody>
       ${tasks.map((t) => { const p = PEOPLE[t.assignee] || { name: t.assignee || '—', color: '#999' }; const st = STATES[t.state];
         const by = t.assignedBy === 'manager' ? `<span class="person" style="--c:${PEOPLE.manager.color}"><i></i>Grid</span>` : '<span class="hint">Anh Nekoma</span>';
         return `<tr class="${t._child ? 'child' : ''}"><td><span class="proj">${esc(t.project || '')}</span>${esc(t.title || t.id)}</td>
         <td><button class="person" data-id="${esc(t.assignee)}" style="--c:${p.color}"><i></i>${esc(p.name)}</button></td><td>${by}</td><td>${pill(t.state)}</td>
         <td><div class="bar" style="--c:${st.color}"><span><b style="width:${t.progress}%"></b></span>${t.progress}%</div></td>
-        <td>${esc(t.deadline || '—')}</td><td>${timeAgo(t.updated)}</td></tr>`; }).join('')}
+        <td>${esc(t.deadline || '—')}</td><td>${timeAgo(t.updated)}</td>
+        <td>${t.state === 'waiting_review' && !t.parent ? `<button class="btn-mini hot" data-review="${esc(t.id)}">Xem & duyệt</button>` : `<button class="btn-mini" data-review="${esc(t.id)}">📎 Xem</button>`}</td></tr>`; }).join('')}
       </tbody></table></div>`
       : `<div class="empty"><b>Chưa có việc nào</b>Mở Claude Code và giao việc, ví dụ: <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code></div>`;
     $('#view-board').innerHTML = head + body;
@@ -328,7 +413,7 @@ export function createUI({ world, send, order, newSession }) {
 
   // ---------- CHAT CÔNG TY ----------
   function threadTitle(id) {
-    if (id === COMPANY) return { project: 'CẢ CÔNG TY', title: 'chung' };
+    if (id === COMPANY) return { project: 'CẢ CÔNG TY', title: 'all' };
     if (id === ORDERS) return { project: 'CLAUDE CHẠY THẬT', title: '⚡ Giao việc' };
     const t = data.tasks.find((x) => x.id === id);
     if (t) return { project: t.project || '', title: t.title || id };
@@ -346,13 +431,13 @@ export function createUI({ world, send, order, newSession }) {
           <div class="msgs" id="msgs"></div>
           <form class="composer" id="composer">
             <div class="mention-row" id="mention-row"></div>
-            <div class="composer-box"><textarea id="composer-input" rows="2" placeholder="Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
+            <div class="composer-box"><textarea id="composer-input" rows="2" placeholder="Nhắn # all… tag @Grid, @Ink hoặc @all để được trả lời"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
             <small class="composer-hint" id="composer-hint" data-base="composer-hint"></small>
           </form>
         </section>
         <aside class="members" id="members"></aside>
       </div>`;
-    $('#mention-row').innerHTML = AGENTS.map((a) => `<button type="button" data-n="${esc(a.name)}" style="--c:${a.color}">@${esc(a.name)}</button>`).join('');
+    $('#mention-row').innerHTML = `<button type="button" data-n="all" class="tag-all" style="--c:#1d1c19">@all</button>` + AGENTS.map((a) => `<button type="button" data-n="${esc(a.name)}" style="--c:${a.color}">@${esc(a.name)}</button>`).join('');
     $('#mention-row').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-n]'); if (!b) return;
       insertName(b.dataset.n);
@@ -375,8 +460,11 @@ export function createUI({ world, send, order, newSession }) {
       try {
         if (channel === ORDERS) await giveOrder(text);
         else {
-          await send(channel === 'all' ? COMPANY : channel, text);
-          flash = { text: mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).' : 'Đã gửi · chỉ ghi lại. Muốn agent làm thật thì gửi ở kênh ⚡ Giao việc.', until: Date.now() + 5000 };
+          const res = await send(channel === 'all' ? COMPANY : channel, text);
+          const toAll = channel === COMPANY || channel === 'all';
+          flash = { text: res?.reply ? `Đã gửi · người được tag đang trả lời${res.queue ? ` (còn ${res.queue} việc phía trước)` : ''}…`
+            : mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).'
+            : toAll ? 'Đã gửi · tag @tên hoặc @all để được trả lời.' : 'Đã gửi · chỉ ghi lại. Muốn agent làm thật thì gửi ở kênh ⚡ Giao việc.', until: Date.now() + 6000 };
         }
         ta.value = '';
         paintStatus(hint);
@@ -414,7 +502,7 @@ export function createUI({ world, send, order, newSession }) {
 
     const chBtn = (id, label, sub, n) => `<button class="channel ${channel === id ? 'active' : ''}" data-t="${esc(id)}"><b>${label}</b><small>${esc(sub)}</small>${n ? `<span class="n">${n}</span>` : ''}</button>`;
     $('#ch-list').innerHTML = `<div class="ch-title">KÊNH</div>` +
-      chBtn(COMPANY, '# chung', 'Cả công ty', company.length) +
+      chBtn(COMPANY, '# all', 'Cả công ty · tag để được trả lời', company.length) +
       chBtn(ORDERS, '⚡ Giao việc', 'Claude Code làm thật', (data.chats[ORDERS] || []).length) +
       chBtn('all', '◎ Tất cả hoạt động', 'Mọi kênh gộp lại', total) +
       `<div class="ch-title">VIỆC (${threads.length})</div>` +
@@ -426,10 +514,10 @@ export function createUI({ world, send, order, newSession }) {
     const list = channel === 'all' ? allMessages(Object.fromEntries(shown)) : shown[0][1].map((m) => ({ ...m, taskId: channel }));
     const tt = threadTitle(channel === 'all' ? COMPANY : channel);
     $('#room-head').innerHTML = channel === 'all'
-      ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # chung</small>`
+      ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # all</small>`
       : channel === ORDERS
         ? `<b>⚡ Giao việc</b><small>Gõ ở đây là Claude Code trên máy chạy thật: gọi "Grid ơi…" để giao trọn gói, hoặc gọi thẳng tên từng bạn</small>`
-        : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Kênh chung của cả công ty · anh Nekoma, Grid, Lue và cả team · tin ở đây chỉ ghi lại' : esc(tt.project)}</small>`;
+        : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Cả công ty · tag @tên để người đó trả lời, @all để cả team (Grid thay mặt) trả lời · không tag thì chỉ ghi lại' : esc(tt.project)}</small>`;
 
     let lastDay = '', lastFrom = '';
     const html = list.length ? list.map((m) => {
@@ -443,16 +531,26 @@ export function createUI({ world, send, order, newSession }) {
       const toMe = m.to === 'cd' ? ' to-me' : '';
       return sep + `<div class="smsg ${cont ? 'cont' : ''}${toMe}">${cont ? '<span class="avatar-gap"></span>' : avatar(m.from)}<div class="smsg-body">
         ${cont ? '' : `<div class="smeta"><b style="--c:${p.color}">${esc(nameOf(m.from))}</b><span class="role">${esc(p.role || '')}</span><time>${hhmm(m.time)}</time>${m.to && m.to !== 'team' ? `<span class="to">→ ${esc(nameOf(m.to))}</span>` : ''}${where}</div>`}
-        <div class="stext">${richText(m.text)}</div></div></div>`;
+        <div class="stext">${richText(m.text)}</div>${attachHtml(filesOf(m))}</div></div>`;
     }).join('') : channel === ORDERS
       ? `<div class="empty"><b>Chưa có lệnh nào</b>Gõ ví dụ <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code> — Claude sẽ chuyển việc cho đúng người.</div>`
       : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Muốn agent làm việc thật thì dùng kênh <b>⚡ Giao việc</b>.</div>`;
+    const typing = data.runner?.busy && data.runner.currentKind === 'chat' && (channel === COMPANY || channel === 'all')
+      ? '<div class="typing"><i></i><i></i><i></i> Người được tag đang trả lời anh…</div>' : '';
     const box = $('#msgs');
-    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-    box.dataset.stick = atBottom ? '1' : '0';
-    const prevTop = box.scrollTop;
-    box.innerHTML = html;
-    if (atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = prevTop;
+    const sig = channel + '|' + html.length + '|' + (list.at(-1)?.time || '') + '|' + typing.length;
+    if (box.dataset.sig !== sig) {
+      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+      box.dataset.stick = atBottom ? '1' : '0';
+      const prevTop = box.scrollTop;
+      box.innerHTML = html + typing;
+      box.dataset.sig = sig;
+      hydrate(box);
+      if (atBottom || box.dataset.sigChannel !== channel) box.scrollTop = box.scrollHeight; else box.scrollTop = prevTop;
+      box.dataset.sigChannel = channel;
+      // ảnh tải xong làm tin dài ra → giữ đáy nếu đang ở đáy
+      box.querySelectorAll('img').forEach((im) => im.addEventListener('load', () => { if (box.dataset.stick !== '0') box.scrollTop = box.scrollHeight; }, { once: true }));
+    }
 
     const isOrder = channel === ORDERS;
     const canSend = isOrder ? runnerStatus().ok : mode === 'live' || mode === 'demo';
@@ -460,11 +558,11 @@ export function createUI({ world, send, order, newSession }) {
     $('#composer-send').disabled = !canSend;
     $('#composer-send').textContent = isOrder ? 'Giao việc ↵' : 'Gửi ↵';
     $('#composer').classList.toggle('order', isOrder);
-    $('#mention-row').querySelectorAll('button').forEach((b) => (b.textContent = isOrder ? `${b.dataset.n} ơi` : `@${b.dataset.n}`));
+    $('#mention-row').querySelectorAll('button').forEach((b) => { b.textContent = isOrder ? `${b.dataset.n} ơi` : `@${b.dataset.n}`; b.hidden = isOrder && b.dataset.n === 'all'; });
     $('#composer-input').placeholder = !canSend
       ? (isOrder ? runnerStatus().text || 'Chưa giao việc được' : 'Chưa kết nối server — chạy start-studio.bat để nhắn')
       : isOrder ? 'Giao việc… vd: Grid ơi, lo trọn gói brief Autumn Café giúp anh'
-      : channel === COMPANY || channel === 'all' ? 'Nhắn cho cả công ty… gõ @Grid, @Ink để gọi tên' : `Nhắn trong # ${tt.title}…`;
+      : channel === COMPANY || channel === 'all' ? 'Nhắn # all… tag @Grid, @Ink hoặc @all để được trả lời' : `Nhắn trong # ${tt.title}…`;
     if (isOrder || (flash && Date.now() < flash.until)) paintStatus($('#composer-hint'));
     else { const h = $('#composer-hint'); h.className = 'composer-hint'; h.textContent = ''; }
 
@@ -500,22 +598,4 @@ export function createUI({ world, send, order, newSession }) {
   setInterval(() => { if (data) renderMini(); }, 15000);
 
   return { update, setMode, select, setView, openProfile };
-}
-
-// Markdown tối giản cho báo cáo của Lue
-function md(src = '') {
-  const lines = String(src).replace(/\r/g, '').split('\n');
-  let html = '', list = null;
-  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
-  const close = () => { if (list) { html += `</${list}>`; list = null; } };
-  for (const l of lines) {
-    let m;
-    if ((m = l.match(/^(#{1,3})\s+(.*)/))) { close(); const n = m[1].length; html += `<h${n}>${inline(m[2])}</h${n}>`; }
-    else if ((m = l.match(/^\s*[-*]\s+(.*)/))) { if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; }
-    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; }
-    else if (!l.trim()) close();
-    else { close(); html += `<p>${inline(l)}</p>`; }
-  }
-  close();
-  return html;
 }

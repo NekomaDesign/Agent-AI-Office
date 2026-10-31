@@ -72,9 +72,17 @@ Agent sẽ ghi trạng thái vào `.studio/`. Văn phòng đọc lại mỗi 3 g
 
 ### Chat công ty
 
-Tab **Chat công ty** giống Slack: kênh `# chung` cho cả công ty, kênh **⚡ Giao việc** (Claude chạy thật), mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
-Ở `# chung` anh nhắn như nhóm chat (Enter để gửi, `@Grid`, `@Ink`… để gọi tên), tin lưu vào `.studio/chat/company.jsonl` và **chỉ được ghi lại**.
-Muốn agent làm việc thật thì gõ ở kênh **⚡ Giao việc**.
+Tab **Chat công ty** giống Slack: kênh `# all` cho cả công ty, kênh **⚡ Giao việc** (Claude chạy thật), mỗi việc một kênh riêng, danh sách thành viên kèm trạng thái.
+
+- **`# all`**: tag `@Ink`, `@Grid`… là người đó trả lời ngay trong kênh. Tag `@all` thì Grid trả lời thay mặt cả team. Không tag thì tin chỉ được ghi lại.
+- **Xem file ngay trong chat**: ảnh, video, SVG, HTML, Markdown nhân viên gửi hiện thẳng trong tin nhắn. Bấm vào để phóng to.
+- **Tải file gốc** về máy, **tải cả bộ .zip** của một việc, hoặc **📂 Mở thư mục** chứa file trong Explorer.
+
+### Duyệt việc qua Grid
+
+Nhân viên làm xong → **Grid duyệt trước** (trạng thái *GRID DUYỆT*). Đạt rồi Grid mới gửi anh **bản cuối** (*CHỜ ANH DUYỆT*).
+Ở **Bảng công việc** bấm **Xem & duyệt**: xem toàn bộ file, rồi **Duyệt bản cuối** hoặc **Gửi góp ý cho Grid**. Grid chuyển góp ý cho đúng người sửa.
+Việc của Lue (trợ lý riêng) thì gửi thẳng anh.
 Sản phẩm nằm trong `outputs/<tên-task>/`. Khi anh nói "duyệt" hoặc "ok", agent chuyển sang **ĐÃ XONG**.
 
 ## Cấu trúc

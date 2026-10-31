@@ -38,7 +38,7 @@ export function normalize(raw = {}) {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- LIVE / DEMO ----------
-// Trả về { send, order, newSession } để anh Nekoma nhắn / giao việc từ văn phòng.
+// Trả về { send, order, newSession, openFolder } để anh Nekoma nhắn / giao việc / mở thư mục từ văn phòng.
 export function startSource(onData, onMode) {
   const forceDemo = new URLSearchParams(location.search).has('demo');
   let mode = forceDemo ? 'demo' : 'connecting';
@@ -83,6 +83,11 @@ export function startSource(onData, onMode) {
     return post('./api/order', { text });
   }
   const newSession = () => post('./api/session/new', {});
+  // mở thư mục chứa file trong Explorer trên máy anh
+  const openFolder = (p) => {
+    if (mode !== 'live') return Promise.reject(new Error('chỉ mở được khi chạy start-studio.bat trên máy'));
+    return post('./api/open-folder', { path: p });
+  };
 
   async function post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio': '1' }, body: JSON.stringify(body) });
@@ -103,7 +108,7 @@ export function startSource(onData, onMode) {
       }, 3000);
     });
   }
-  return { send, order, newSession };
+  return { send, order, newSession, openFolder };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------
@@ -124,7 +129,7 @@ function createDemo() {
     [11, 'chat', `${P}-brief`, 'brief', 'manager', 'Dạ em nhận ạ 📋'],
     [12, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 25, 'Theo dõi team', 'cd'],
     [17, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'working', 55, 'Đang tách deliverable', 'manager'],
-    [24, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [24, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'manager_review', 100, 'Gửi Grid duyệt', 'manager'],
     [24, 'chat', `${P}-brief`, 'brief', 'manager', 'Plan xong rồi Grid ơi ✨ 4 deliverable, deadline 05/11.'],
     [28, 'chat', `${P}-headline`, 'manager', 'ink', 'Ink, viết 5 headline theo plan của Brief nhé.'],
     [28, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'working', 10, '', 'manager'],
@@ -146,19 +151,25 @@ function createDemo() {
     [52, 'chat', 'daily-report', 'lue', 'cd', 'Báo cáo xong rồi anh 🦆 Grid đang điều 4 bạn làm Autumn Café. Xem ở Phòng Lue nha.'],
     [58, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'working', 50, 'Cảnh 3/5', 'manager'],
     [60, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 60, 'Setup đèn 3 điểm', 'manager'],
-    [66, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [66, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'manager_review', 100, 'Gửi Grid duyệt', 'manager'],
     [66, 'chat', COMPANY, 'ink', 'team', 'Xong 5 headline rồi nha cả nhà ☕ Em thích nhất: "Thu về, cà phê ấm tay".'],
     [74, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'blocked', 70, 'Thiếu logo vector', 'manager'],
     [74, 'chat', COMPANY, 'cube', 'cd', 'Anh Nekoma ơi, em cần file logo vector (SVG) của quán để gắn lên ly ạ 🙏'],
-    [80, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [80, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'manager_review', 100, 'Gửi Grid duyệt', 'manager'],
     [80, 'chat', `${P}-visual`, 'pixel', 'manager', 'Visual direction v1 xong: palette 5 màu + 2 cặp font có dấu 🎨'],
     [86, 'chat', COMPANY, 'cd', 'cube', '@cube anh gửi logo vào outputs/autumn-cafe/logo.svg rồi nhé.'],
     [88, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'working', 85, 'Gắn logo', 'manager'],
-    [96, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'waiting_review', 100, 'Gửi Grid', 'manager'],
-    [102, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'waiting_review', 100, 'Gửi Grid', 'manager'],
+    [96, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'manager_review', 100, 'Gửi Grid duyệt', 'manager'],
+    [102, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'manager_review', 100, 'Gửi Grid duyệt', 'manager'],
     [104, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'working', 85, 'Kiểm tra & tổng hợp', 'cd'],
+    [106, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'done', 100, 'Grid đã duyệt', 'manager'],
+    [107, 'task', `${P}-headline`, 'ink', '5 headline ra mắt menu thu', 'done', 100, 'Grid đã duyệt', 'manager'],
+    [108, 'chat', `${P}-visual`, 'manager', 'pixel', 'Visual ổn rồi Pixel, mình gửi anh Nekoma bản cuối nha 👍'],
+    [108, 'task', `${P}-visual`, 'pixel', 'Visual direction v1 – palette & type', 'done', 100, 'Grid đã duyệt', 'manager'],
+    [110, 'task', `${P}-story`, 'frame', 'Storyboard video 15s', 'done', 100, 'Grid đã duyệt', 'manager'],
+    [111, 'task', `${P}-cup3d`, 'cube', 'Scene 3D ly cà phê 360°', 'done', 100, 'Grid đã duyệt', 'manager'],
     [114, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'waiting_review', 100, 'Chờ anh duyệt', 'cd'],
-    [114, 'chat', P, 'manager', 'cd', 'Anh ơi, đủ 4 phần rồi ạ. Em gom ở outputs/autumn-cafe/summary.md — có 2 điểm cần anh chốt.'],
+    [114, 'chat', P, 'manager', 'cd', 'Anh ơi, em đã duyệt đủ 4 phần của team, đây là bản cuối ạ: outputs/autumn-cafe/summary.md — có 2 điểm cần anh chốt.'],
     [124, 'chat', P, 'cd', 'manager', 'Duyệt hết nhé, team làm tốt lắm!'],
     [124, 'task', P, 'manager', 'Chiến dịch ra mắt menu thu', 'done', 100, 'Anh đã duyệt', 'cd'],
     [124, 'task', `${P}-brief`, 'brief', 'Phân tích brief & lên plan', 'done', 100, 'Anh đã duyệt', 'manager'],
@@ -185,6 +196,9 @@ function createDemo() {
       const tag = m ? m[1].toLowerCase() : '';
       const to = tag === 'grid' ? 'manager' : AGENTS.some((a) => a.id === tag) ? tag : 'team';
       extra.push({ channel, msg: { from: 'cd', to, text, time: toLocalIso(new Date()), via: 'office' } });
+      // bản demo: người được tag (hoặc Grid nếu @all) đáp lại 1 câu mẫu
+      const who = /@(all|team)/i.test(text) ? 'manager' : to !== 'team' ? to : null;
+      if (channel === COMPANY && who) setTimeout(() => extra.push({ channel, msg: { from: who, to: 'cd', text: 'Dạ anh, em đây ạ! (bản demo — chạy start-studio.bat thì em trả lời thật bằng Claude) 👋', time: toLocalIso(new Date()) } }), 1800);
     },
     snapshot() {
       const elapsed = ((Date.now() - start) / 1000);

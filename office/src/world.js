@@ -664,7 +664,7 @@ function buildBigScreen(world, at) {
     ['NGƯỜI LÀM', 'VIỆC', 'TRẠNG THÁI', 'TIẾN ĐỘ'].forEach((c, i) => ctx.fillText(c, cols[i], 150));
     ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(48, 172, w - 96, 2);
 
-    const order = { working: 0, blocked: 1, waiting_review: 2, idle: 3, done: 4 };
+    const order = { working: 0, blocked: 1, waiting_review: 2, manager_review: 3, idle: 4, done: 5 };
     const tasks = (data?.tasks || []).slice().sort((a, b) => (order[a.state] - order[b.state]) || String(b.updated || '').localeCompare(String(a.updated || ''))).slice(0, 6);
     if (!tasks.length) {
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `700 40px ${FONT}`; ctx.textAlign = 'center';
@@ -1243,7 +1243,7 @@ function buildStation(person, cfg, world, onSelect) {
       ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(16, h - 18, w - 32, 6);
       ctx.fillStyle = '#f0a81c'; ctx.fillRect(16, h - 18, (w - 32) * (status.progress || 0) / 100, 6);
     } else {
-      const map = { idle: ['#e9e3d8', '#9b958b', person.human ? '' : 'z z z'], waiting_review: ['#ec6a24', '#fff', 'CHỜ DUYỆT'], blocked: ['#d93a2b', '#fff', 'CẦN HỖ TRỢ'], done: ['#2f9a5c', '#fff', 'ĐÃ XONG ✓'] };
+      const map = { idle: ['#e9e3d8', '#9b958b', person.human ? '' : 'z z z'], waiting_review: ['#ec6a24', '#fff', 'CHỜ DUYỆT'], manager_review: ['#14a3a0', '#fff', 'GRID DUYỆT'], blocked: ['#d93a2b', '#fff', 'CẦN HỖ TRỢ'], done: ['#2f9a5c', '#fff', 'ĐÃ XONG ✓'] };
       const [bg, fg, txt] = map[st] || map.idle;
       ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1468,7 +1468,7 @@ function makeCharacter(person) {
         tgt.headY = Math.sin(t * 0.35) * 0.55;
         tgt.headX = -0.05;
         tgt.lean = 0.12;
-      } else if (state === 'waiting_review') {
+      } else if (state === 'waiting_review' || state === 'manager_review') {
         // giơ tay phải vẫy
         tgt.shX = [0.12, -0.25]; tgt.shZ = [0, 2.5 + Math.sin(t * 6) * 0.25]; tgt.elX = [1.25, 0.4];
         tgt.headY = 0.4 * Math.sin(t * 0.8); tgt.headX = -0.1; tgt.lean = 0.05;
