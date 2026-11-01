@@ -147,6 +147,9 @@ Markdown cho văn bản (`brief-analysis.md`, `headlines.md`, `storyboard.md`…
 Blender, `.jsx` cho script After Effects, `.svg/.html` cho layout. Luôn kèm `README.md` ngắn
 nói file nào là gì.
 
+Xuất ảnh PNG từ HTML/SVG: `node office/tools/render-png.mjs outputs/<taskId>/<file>.html|svg [--size WxH] [--scale 2] [--out outputs/.../x.png]`.
+Công cụ chỉ đọc và ghi trong `outputs/`. Không gọi thẳng `msedge.exe`/`chrome.exe`.
+
 ### Thời gian
 
 Dùng giờ Việt Nam (+07:00), định dạng ISO 8601. Lấy giờ bằng lệnh hệ thống, không đoán.

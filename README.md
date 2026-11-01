@@ -40,7 +40,7 @@ Gõ vào ô **Giao việc…** ở góc dưới trái văn phòng, hoặc kênh 
 Server trên máy sẽ gọi Claude Code chạy nền để chuyển việc cho đúng người. Gõ `Grid ơi, lo trọn gói…` để Grid tự chia việc, hoặc bấm tên agent phía trên ô chat để chèn nhanh "Ink ơi, …".
 
 - Lệnh xếp hàng lần lượt. Claude nhớ ngữ cảnh các lệnh trước, bấm **Phiên mới** để bắt đầu lại.
-- Ở chế độ này agent được tự ghi file trong dự án, được đọc web và chạy lệnh `date`/`mkdir`/`ls`. Các lệnh hệ thống khác bị chặn.
+- Ở chế độ này agent được tự ghi file trong dự án, được đọc web, chạy lệnh `date`/`mkdir`/`ls` và công cụ xuất PNG `node office/tools/render-png.mjs` (chỉ đọc/ghi trong `outputs/`). Các lệnh hệ thống khác bị chặn.
 - Cần đăng nhập Claude Code ít nhất một lần (gõ `claude` trong PowerShell).
 
 ### Cách 2 — trong Claude Code

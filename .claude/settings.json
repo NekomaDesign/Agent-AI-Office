@@ -9,6 +9,8 @@
       "Bash(date:*)",
       "Bash(mkdir:*)",
       "Bash(ls:*)",
+      "Bash(node office/tools/render-png.mjs:*)",
+      "PowerShell(node office/tools/render-png.mjs *)",
       "WebSearch",
       "WebFetch"
     ]
