@@ -26,6 +26,7 @@ async function boot() {
     order: (text) => source.order(text),
     newSession: () => source.newSession(),
     openFolder: (p) => source.openFolder(p),
+    setChatter: (on) => source.setChatter(on),
   });
   ui.select('cd', false);
 

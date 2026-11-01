@@ -5,6 +5,8 @@
 // - POST /api/chat: anh Nekoma nhắn vào chat chung (hoặc 1 kênh việc) — chỉ ghi lại, không chạy lệnh
 // - POST /api/order: anh Nekoma giao việc từ web → Claude Code chạy nền
 // - GET /files/outputs/...: xem trực tiếp / tải file nhân viên gửi · GET /api/zip: tải cả thư mục · POST /api/open-folder
+// - Ghi usage mỗi lần Claude chạy nền vào .studio/usage.jsonl (hiện trên giao diện)
+// - Tám chuyện: nhân viên nhắn nhau theo kịch bản office/chatter.json (không tốn lượt Claude) · POST /api/chatter bật/tắt
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import fss from 'node:fs';
@@ -27,7 +29,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.gif': 'image/gif', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
   '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.jsx': 'text/plain; charset=utf-8', '.csv': 'text/csv; charset=utf-8',
-  '.pdf': 'application/pdf', '.zip': 'application/zip', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+  '.pdf': 'application/pdf', '.obj': 'text/plain; charset=utf-8', '.stl': 'model/stl', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.zip': 'application/zip', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
 };
 
 const nowIso = () => {
@@ -166,7 +168,9 @@ function pump() {
 }
 
 // node office/tools/render-png.mjs: xuất PNG từ HTML/SVG, chỉ đọc/ghi trong outputs/ (anh Nekoma đã cho phép)
-const TOOLS = 'Task,Read,Write,Edit,MultiEdit,Glob,Grep,TodoWrite,WebSearch,WebFetch,Bash(date:*),Bash(mkdir:*),Bash(ls:*),Bash(node office/tools/render-png.mjs:*),PowerShell(node office/tools/render-png.mjs *)';
+const TOOLS = 'Task,Read,Write,Edit,MultiEdit,Glob,Grep,TodoWrite,WebSearch,WebFetch,Bash(date:*),Bash(mkdir:*),Bash(ls:*),Bash(node office/tools/render-png.mjs:*),PowerShell(node office/tools/render-png.mjs *),' +
+  // xuất PNG/PDF và mô hình 3D — chỉ đọc/ghi trong outputs/ (anh Nekoma đã cho phép)
+  'Bash(node office/tools/render.mjs:*),PowerShell(node office/tools/render.mjs *),Bash(node office/tools/export-3d.mjs:*),PowerShell(node office/tools/export-3d.mjs *)';
 
 function runJob(job, allowResume) {
   runner.busy = true;
@@ -194,6 +198,7 @@ function runJob(job, allowResume) {
       let json = null;
       try { json = JSON.parse(out.trim().split(/\r?\n/).filter(Boolean).pop()); } catch {}
       if (json && json.session_id) { runner.sessionId = json.session_id; await saveSession(); }
+      await logUsage(job, json, code, err || out);
       if (json && !json.is_error && typeof json.result === 'string') {
         runner.lastError = '';
         // kênh # all: các bạn tự nhắn trả lời vào kênh, không cần thêm lời của bộ chạy
@@ -218,6 +223,44 @@ function runJob(job, allowResume) {
   });
 }
 
+// ======================================================================
+// USAGE — mỗi lần Claude chạy nền ghi 1 dòng vào .studio/usage.jsonl
+// (chỉ tính phần văn phòng gọi Claude; gói Pro không có API công khai cho % hạn mức)
+// ======================================================================
+const USAGE_FILE = path.join(STUDIO, 'usage.jsonl');
+const usage = { limit: null, cache: null, at: 0 };
+async function logUsage(job, json, code, rawErr) {
+  const u = json?.usage || {};
+  const errText = json?.is_error || !json ? String(json?.result || rawErr || `mã lỗi ${code}`) : '';
+  const limited = /limit|resets?|quota|usage/i.test(errText) && /limit/i.test(errText);
+  const row = {
+    time: nowIso(), kind: job.kind || 'order', ok: !!json && !json.is_error, text: String(job.text || '').slice(0, 80),
+    cost: Number(json?.total_cost_usd) || 0, input: u.input_tokens || 0, output: u.output_tokens || 0,
+    cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0,
+    durationMs: json?.duration_ms || 0, turns: json?.num_turns || 0, models: Object.keys(json?.modelUsage || {}),
+    ...(errText ? { error: errText.slice(0, 200) } : {}), ...(limited ? { limited: true } : {}),
+  };
+  usage.limit = limited ? { text: errText.slice(0, 200), at: row.time, reset: errText.match(/resets?\s+([^·(\n]+?)(\s*\(|$)/i)?.[1]?.trim() || '' } : row.ok ? null : usage.limit;
+  usage.cache = null;
+  await fs.appendFile(USAGE_FILE, JSON.stringify(row) + '\n', 'utf8');
+}
+async function usageSummary() {
+  if (usage.cache && Date.now() - usage.at < 5000) return usage.cache;
+  let rows = [];
+  try { rows = (await fs.readFile(USAGE_FILE, 'utf8')).split(/\r?\n/).map((l) => { try { return l.trim() ? JSON.parse(l) : null; } catch { return null; } }).filter(Boolean); } catch { /* chưa có */ }
+  const day = nowIso().slice(0, 10);
+  const sum = (list) => list.reduce((a, r) => ({ runs: a.runs + 1, ok: a.ok + (r.ok ? 1 : 0), tokens: a.tokens + r.input + r.output + r.cacheRead + r.cacheWrite, output: a.output + r.output, cost: a.cost + r.cost, ms: a.ms + r.durationMs }), { runs: 0, ok: 0, tokens: 0, output: 0, cost: 0, ms: 0 });
+  const since = (h) => rows.filter((r) => Date.now() - new Date(r.time).getTime() < h * 3600e3);
+  // nhớ thông báo hết lượt gần nhất kể cả sau khi khởi động lại server
+  const lastLimit = [...rows].reverse().find((r) => r.limited);
+  const lastOk = [...rows].reverse().find((r) => r.ok);
+  const limit = usage.limit || (lastLimit && (!lastOk || lastLimit.time > lastOk.time) ? { text: lastLimit.error, at: lastLimit.time, reset: lastLimit.error?.match(/resets?\s+([^·(\n]+?)(\s*\(|$)/i)?.[1]?.trim() || '' } : null);
+  usage.cache = { today: sum(rows.filter((r) => r.time.slice(0, 10) === day)), last5h: sum(since(5)), last7d: sum(since(24 * 7)), total: sum(rows), recent: rows.slice(-12).reverse(), limit };
+  usage.at = Date.now();
+  return usage.cache;
+}
+
+let chatterOn = true;
 function runnerState() {
   return {
     available: !!runner.claudePath,
@@ -229,7 +272,82 @@ function runnerState() {
     currentKind: runner.current?.kind || '',
     lastError: runner.lastError,
     session: !!runner.sessionId,
+    chatter: chatterOn,
   };
+}
+
+// ======================================================================
+// TÁM CHUYỆN — nhân viên nhắn nhau theo kịch bản office/chatter.json, kể cả khi không có việc.
+// Không gọi Claude, không tạo task. Ghi vào .studio/chat/tam-chuyen.jsonl (kênh ☕ Tám chuyện).
+// ======================================================================
+const CHATTER_THREAD = 'tam-chuyen';
+const chatter = { timer: null, playing: false, last: [] };
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+async function chatterConfig() {
+  const studio = await readJson(path.join(STUDIO, 'studio.json'), {});
+  const script = await readJson(path.join(WEB, 'chatter.json'), { threads: [] });
+  return { enabled: studio.chatter?.enabled !== false, script };
+}
+async function chatterContext() {
+  const agents = {};
+  for (const a of AGENTS) agents[a] = await readJson(path.join(STUDIO, 'status', `${a}.json`), { state: 'idle' });
+  const tasks = await readJson(path.join(STUDIO, 'tasks.json'), []);
+  const short = (t) => String(t || '').replace(/^[^·]*·\s*/, '').slice(0, 60);
+  const busy = AGENTS.filter((a) => agents[a].state === 'working');
+  return {
+    agents, busy,
+    has: {
+      any: true, idle: !busy.length, busy: !!busy.length,
+      review: Array.isArray(tasks) && tasks.some((t) => t.state === 'manager_review'),
+      final: Array.isArray(tasks) && tasks.some((t) => t.state === 'waiting_review'),
+      blocked: AGENTS.some((a) => agents[a].state === 'blocked'),
+    },
+    fill(text) {
+      return text.replace(/\{task:(\w+)\}/g, (_, id) => short(agents[id]?.task) || 'việc đang làm')
+        .replace(/\{busyTask\}/g, () => short(agents[busy[0]]?.task) || 'task mới');
+    },
+  };
+}
+function threadOk(t, ctx) {
+  const w = t.when || 'any';
+  if (w.startsWith('working:')) return ctx.agents[w.slice(8)]?.state === 'working';
+  if (w.startsWith('state:')) { const [, id, st] = w.split(':'); return ctx.agents[id]?.state === st; }
+  return !!ctx.has[w];
+}
+async function playChatter() {
+  if (chatter.playing) return;
+  const { enabled, script } = await chatterConfig();
+  if (!enabled || !script.threads?.length) return;
+  const ctx = await chatterContext();
+  // ưu tiên chuyện đúng bối cảnh (có người đang làm, chờ duyệt…), tránh lặp lại mấy đoạn vừa nói
+  const ok = script.threads.map((t, i) => ({ t, i })).filter(({ t, i }) => threadOk(t, ctx) && !chatter.last.includes(i));
+  const ctxual = ok.filter(({ t }) => (t.when || 'any') !== 'any');
+  const chosen = ctxual.length && Math.random() < 0.55 ? pick(ctxual) : pick(ok.length ? ok : script.threads.map((t, i) => ({ t, i })));
+  if (!chosen) return;
+  chatter.last = [chosen.i, ...chatter.last].slice(0, Math.min(12, Math.floor(script.threads.length / 2)));
+  chatter.playing = true;
+  const [gapMin, gapMax] = script.settings?.lineGapSec || [4, 9];
+  for (const [from, to, text] of chosen.t.lines) {
+    if (!AGENTS.includes(from)) continue;
+    await appendChat(CHATTER_THREAD, { from, to: to === 'team' || AGENTS.includes(to) ? to : 'team', text: ctx.fill(text), sim: true });
+    await new Promise((r) => setTimeout(r, (gapMin + Math.random() * (gapMax - gapMin)) * 1000));
+  }
+  chatter.playing = false;
+  await trimChatter();
+}
+// kênh giả lập: giữ 300 tin gần nhất cho nhẹ
+async function trimChatter() {
+  const f = path.join(STUDIO, 'chat', `${CHATTER_THREAD}.jsonl`);
+  try {
+    const lines = (await fs.readFile(f, 'utf8')).split(/\r?\n/).filter(Boolean);
+    if (lines.length > 400) await fs.writeFile(f, lines.slice(-300).join('\n') + '\n', 'utf8');
+  } catch { /* chưa có */ }
+}
+async function scheduleChatter(first) {
+  clearTimeout(chatter.timer);
+  const { script } = await chatterConfig();
+  const [min, max] = [script.settings?.minSec || 50, script.settings?.maxSec || 140];
+  chatter.timer = setTimeout(async () => { try { await playChatter(); } catch { chatter.playing = false; } scheduleChatter(); }, (first ? 8 : min + Math.random() * (max - min)) * 1000);
 }
 
 // chặn trang web lạ gọi API (chỉ chấp nhận từ chính văn phòng trên localhost)
@@ -315,6 +433,7 @@ async function serveOutput(req, res, abs, download) {
     // file do agent tạo: cấm chạy script khi mở thẳng (svg/html)
     'Content-Security-Policy': "sandbox; default-src 'none'; img-src * data: blob:; media-src * data: blob:; style-src 'unsafe-inline' *; font-src * data:",
   };
+  if (/\.pdf$/i.test(abs)) delete head['Content-Security-Policy'];
   if (download) head['Content-Disposition'] = attachName(path.basename(abs));
   // tua video cần Range
   const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
@@ -382,7 +501,8 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/api/state') {
-      const body = JSON.stringify({ ...(await readState()), runner: runnerState() });
+      chatterOn = (await chatterConfig()).enabled;
+      const body = JSON.stringify({ ...(await readState()), runner: runnerState(), usage: await usageSummary() });
       res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
       return res.end(body);
     }
@@ -416,6 +536,19 @@ const server = http.createServer(async (req, res) => {
       let st; try { st = await fs.stat(abs); } catch { return send(404, { ok: false, error: 'Không tìm thấy' }); }
       openInExplorer(abs, st.isFile());
       return send(200, { ok: true, path: abs });
+    }
+    if (url.pathname === '/api/chatter') {
+      if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }
+      let on = true;
+      try { on = !!JSON.parse(await readBody(req)).enabled; } catch {}
+      const f = path.join(STUDIO, 'studio.json');
+      const studio = await readJson(f, {});
+      studio.chatter = { ...(studio.chatter || {}), enabled: on };
+      await fs.writeFile(f, JSON.stringify(studio, null, 2) + '\n', 'utf8');
+      chatterOn = on;
+      if (on) scheduleChatter(true);
+      res.writeHead(200, { 'Content-Type': MIME['.json'] });
+      return res.end(JSON.stringify({ ok: true, enabled: on }));
     }
     if (url.pathname === '/api/chat') {
       if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }
@@ -472,6 +605,7 @@ function listen(port) {
 }
 
 await ensureStudio();
+scheduleChatter(true);
 await loadSession();
 await detectClaude();
 listen(START_PORT);

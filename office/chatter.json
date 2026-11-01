@@ -1,0 +1,138 @@
+{
+  "_ghi_chu": [
+    "Kịch bản TÁM CHUYỆN của văn phòng — nhân viên tự nhắn nhau trong kênh ☕ Tám chuyện, kể cả khi không có việc.",
+    "KHÔNG gọi Claude, không tốn lượt dùng, không tạo task. Server đọc file này, cứ minSec–maxSec giây lại chọn 1 đoạn để diễn.",
+    "Mỗi dòng: [người nói, người nghe, câu nói]. Người: manager (Grid), lue, brief, ink, pixel, cube, frame. Người nghe 'team' = nói cả nhóm (người nói sẽ ra Quảng trường chat).",
+    "when: any = lúc nào cũng được · idle = cả team rảnh · busy = có người đang làm · working:<id> = người đó đang làm · review = có bài chờ Grid duyệt · final = có bản cuối chờ anh duyệt · blocked = có người bị kẹt.",
+    "Chỗ trống tự điền: {task:<id>} = việc người đó đang làm · {busyTask} = việc của người đang làm đầu tiên.",
+    "Muốn thêm/bớt/sửa câu: sửa thẳng file này, server tự đọc lại ở lượt sau, không cần khởi động lại."
+  ],
+  "settings": { "minSec": 50, "maxSec": 140, "lineGapSec": [4, 9] },
+  "threads": [
+    { "when": "any", "lines": [
+      ["pixel", "ink", "Ink ơi headline dài 9 chữ thì layout poster 4:5 hơi chật đó, rút còn 6 chữ được khum 🥺"],
+      ["ink", "pixel", "Được luôn, headline ngắn mới đấm vào mắt. Để mình cook bản 6 chữ, giữ nguyên insight nha"],
+      ["pixel", "ink", "Real, 6 chữ là đẹp nóc kịch trần 🙌"]
+    ]},
+    { "when": "any", "lines": [
+      ["frame", "cube", "Cube ơi file render tối qua bao nhiêu sample vậy, frame 120 bị noise lấm tấm á"],
+      ["cube", "frame", "256 sample + denoise OpenImage. Lấm tấm chắc do ánh sáng HDRI quá gắt, để mình hạ strength xuống 0.8"],
+      ["frame", "cube", "Ok gét gô, render lại đoạn 110–130 thôi cho đỡ cháy máy 🔥"]
+    ]},
+    { "when": "any", "lines": [
+      ["lue", "team", "Nhắc nhẹ cả nhà: 17h anh Nekoma chốt bản cuối nha, ai có gì cần anh xem thì nộp Grid trước 16h 🦆"],
+      ["manager", "lue", "Cảm ơn Lue, mình gom đủ trước 16h30 rồi gửi anh 1 lần cho gọn 🧭"],
+      ["brief", "team", "Đã note, mình update timeline trong plan luôn"]
+    ]},
+    { "when": "any", "lines": [
+      ["ink", "team", "Mẹo nhỏ: hook 3 giây đầu cứ mở bằng câu hỏi hoặc con số, retention lên thấy rõ luôn á"],
+      ["frame", "ink", "Chuẩn, bên motion mình cũng cut cảnh đầu ở giây 2.5 cho khớp hook, xem mượt hơn hẳn"],
+      ["pixel", "team", "Lưu lại làm checklist chung đi, đỉnh vậy mà để trôi thì phí 📌"]
+    ]},
+    { "when": "any", "lines": [
+      ["pixel", "team", "Ai còn dùng Be Vietnam Pro bản cũ thì update nha, bản mới dấu tiếng Việt đẹp hơn, chữ Ư không bị lệch"],
+      ["cube", "pixel", "Ủa có vụ đó hả, xỉu ngang. Texture chữ trên ly 3D đang dùng bản cũ thiệt"],
+      ["pixel", "cube", "Gửi Cube file font mới trong outputs nha, nhớ convert outline trước khi map texture"]
+    ]},
+    { "when": "any", "lines": [
+      ["manager", "team", "Retro nhanh tuần này nè: việc nào trễ là do thiếu input từ đầu. Từ giờ Brief chốt input trước khi mình chia việc nha"],
+      ["brief", "manager", "Ok Grid, mỗi task mình thêm mục 'input bắt buộc', thiếu là báo blocked liền chứ không đoán"],
+      ["frame", "manager", "Mood quá, đỡ phải làm lại storyboard 3 lần 🥲"]
+    ]},
+    { "when": "any", "lines": [
+      ["cube", "team", "Fun fact: model ly cà phê giảm từ 120k xuống 18k tam giác mà nhìn y chang, nhờ normal map 😎"],
+      ["frame", "cube", "Flex nhẹ quá ha. Nhưng thật, file nhẹ thì mình comp trong AE mới không lag"],
+      ["cube", "frame", "Gửi bạn bản .glb, kéo vào xem thử real-time luôn"]
+    ]},
+    { "when": "any", "lines": [
+      ["lue", "manager", "Grid ơi tuần này anh Nekoma đã duyệt 3 bản cuối, chưa có cái nào bị trả về. Team đang phong độ ghê"],
+      ["manager", "lue", "Hehe nhờ duyệt kỹ ở vòng trong đó. Lue ghi vào báo cáo cuối tuần giúp mình nha"],
+      ["lue", "manager", "Okiee, có cả biểu đồ cho anh xem cho sướng mắt 📊"]
+    ]},
+    { "when": "any", "lines": [
+      ["pixel", "frame", "Frame ơi palette mới có 5 màu thôi nha, đừng thêm gradient tím nữa, lệch brand á"],
+      ["frame", "pixel", "Khum hứa nhưng sẽ cố 😆 Mà gradient cam → kem có được không?"],
+      ["pixel", "frame", "Cam → kem thì được, nằm trong palette. Duyệt!"]
+    ]},
+    { "when": "any", "lines": [
+      ["brief", "team", "Đọc brief khách mới thấy họ ghi 'trẻ trung nhưng sang' 🫠 mình đổi thành 3 keyword đo được: tương phản cao, nhiều khoảng thở, 1 màu nhấn"],
+      ["ink", "brief", "Hay đó, có keyword cụ thể thì viết tone of voice dễ hơn hẳn"],
+      ["pixel", "brief", "Real, 'sang' mà không định nghĩa thì cãi nhau tới mùa sau 😂"]
+    ]},
+    { "when": "any", "lines": [
+      ["frame", "team", "Ai cần expression loop mượt thì xài loopOut('pingpong') + easing 80/20 nha, mình để sẵn trong expressions.md"],
+      ["cube", "frame", "Lưu! Bên Blender mình cũng set F-curve cycle cho cảnh xoay 360, khớp nhịp với AE luôn"]
+    ]},
+    { "when": "any", "lines": [
+      ["ink", "lue", "Lue ơi mai có họp với khách không, để mình chuẩn bị 3 phương án copy"],
+      ["lue", "ink", "Mai 10h nha Ink, mình gửi lịch rồi đó. Mang luôn bản có [placeholder] số liệu để anh Nekoma hỏi khách tại chỗ"],
+      ["ink", "lue", "Đỉnh, Lue nhớ hết mọi thứ thiệt 🫡"]
+    ]},
+    { "when": "idle", "lines": [
+      ["pixel", "team", "Đang không có task, mình làm lại bộ icon nội bộ cho studio nha, nhìn bộ cũ hơi 2019 😅"],
+      ["manager", "pixel", "Được, nhưng nhớ để trong outputs riêng, đừng đụng file của dự án khách nha"],
+      ["pixel", "manager", "Okela, folder riêng luôn 🎨"]
+    ]},
+    { "when": "idle", "lines": [
+      ["cube", "frame", "Rảnh quá mình thử dựng lại cái logo con mèo 3D, ai hóng không"],
+      ["frame", "cube", "Hóng! Dựng xong gửi mình làm intro 3 giây cho reel studio luôn"],
+      ["ink", "team", "Mình góp câu tagline: 'Mèo lo phần còn lại' 😼"]
+    ]},
+    { "when": "idle", "lines": [
+      ["brief", "team", "Lúc rảnh mình tổng hợp 5 lỗi brief hay gặp nhất, gửi Lue để làm template hỏi khách nha"],
+      ["lue", "brief", "Yesss, có template là mỗi lần nhận brief đỡ hỏi đi hỏi lại 🦆"]
+    ]},
+    { "when": "idle", "lines": [
+      ["ink", "pixel", "Team đang chill nè, đi cà phê không Pixel"],
+      ["pixel", "ink", "Đi, nhưng phải là quán có ánh sáng đẹp để mình chụp moodboard 📸"],
+      ["frame", "team", "Rủ mình với, mình quay b-roll luôn cho reel"]
+    ]},
+    { "when": "busy", "lines": [
+      ["lue", "team", "Đang có việc chạy: {busyTask}. Ai cần gì thì nhắn mình, đừng gọi người đang tập trung nha 🤫"],
+      ["manager", "lue", "Chuẩn, giữ focus cho team. Có gì gấp thì nhắn Grid"]
+    ]},
+    { "when": "working:pixel", "lines": [
+      ["ink", "pixel", "Pixel làm '{task:pixel}' tới đâu rồi, cần mình đổi copy cho vừa layout không"],
+      ["pixel", "ink", "Đang canh grid nè, headline vừa khít. Xong mình ping liền, đừng đổi chữ nào nha 🙏"]
+    ]},
+    { "when": "working:pixel", "lines": [
+      ["cube", "pixel", "Thấy Pixel đang cook '{task:pixel}', có cần mình render một vật thể 3D chèn vào không"],
+      ["pixel", "cube", "Có thì đỉnh! Một con mèo low-poly góc 3/4, nền trong suốt nha"],
+      ["cube", "pixel", "Ok, mình xuất PNG nền trong + file .glb cho bạn xem trước"]
+    ]},
+    { "when": "working:ink", "lines": [
+      ["pixel", "ink", "Ink viết '{task:ink}' xong gửi mình bản chốt sớm nha, mình đặt chữ trước cho kịp"],
+      ["ink", "pixel", "Đang ở bản 3/5, bản chốt có trong 15 phút nữa ✍️"]
+    ]},
+    { "when": "working:cube", "lines": [
+      ["frame", "cube", "Cube ơi '{task:cube}' xong nhớ xuất thêm .glb nha, mình cần canh camera trước khi dựng motion"],
+      ["cube", "frame", "Có liền, mình xuất glb + png xem trước, bạn mở thẳng trong chat được luôn"]
+    ]},
+    { "when": "working:frame", "lines": [
+      ["ink", "frame", "Frame làm '{task:frame}' cần VO đọc thử không, mình đếm nhịp ~2.7 từ/giây rồi"],
+      ["frame", "ink", "Cần! Gửi mình script có timecode, mình khớp beat 100 BPM 🎬"]
+    ]},
+    { "when": "working:brief", "lines": [
+      ["manager", "brief", "Brief ơi '{task:brief}' xong thì báo mình để mình chia việc cho cả team nha"],
+      ["brief", "manager", "Sắp xong rồi Grid, mình đang ghi rõ input từng task để không ai bị kẹt"]
+    ]},
+    { "when": "working:manager", "lines": [
+      ["lue", "manager", "Grid đang điều phối '{task:manager}' hả, cần mình nhắc deadline cho ai không"],
+      ["manager", "lue", "Nhắc giúp mình mấy bạn đang chạy là 16h nộp mình duyệt nha Lue 🧭"],
+      ["lue", "team", "Cả nhà ơi 16h nộp Grid duyệt nha, nộp sớm được khen sớm 🦆"]
+    ]},
+    { "when": "review", "lines": [
+      ["manager", "team", "Mình đang duyệt bài, vài phút nữa có góp ý nha. Không có gì là auto pass nha cả nhà 😆"],
+      ["pixel", "manager", "Run quá Grid ơi, nhớ duyệt nhẹ tay với file của mình 🥺"],
+      ["manager", "pixel", "Duyệt kỹ để anh Nekoma xem 1 lần là chốt luôn, vậy mới slay"]
+    ]},
+    { "when": "final", "lines": [
+      ["manager", "lue", "Bản cuối đã gửi anh Nekoma rồi, Lue nhắc anh xem giúp mình nha"],
+      ["lue", "manager", "Ok Grid, mình đẩy lên đầu danh sách việc của anh luôn 🦆"]
+    ]},
+    { "when": "blocked", "lines": [
+      ["manager", "team", "Có bạn đang bị kẹt chờ input. Ai biết file/thông tin đó nằm đâu thì báo mình nha, đừng để ai ngồi chờ"],
+      ["brief", "manager", "Để mình check lại brief gốc xem có ghi không, chưa có thì mình hỏi anh Nekoma giúp"]
+    ]}
+  ]
+}

@@ -9,6 +9,8 @@ const VID = /\.(mp4|webm|mov)$/i;
 const AUD = /\.(mp3|wav|ogg)$/i;
 const HTML = /\.html?$/i;
 const DOC = /\.(md|txt|py|jsx|js|csv|json)$/i;
+const PDF = /\.pdf$/i;
+const M3D = /\.(glb|gltf|obj|stl)$/i;
 const isDir = (p) => p.endsWith('/') || !/\.[a-z0-9]{1,5}$/i.test(p);
 
 export const fileUrl = (p, download) => `./files/${p.split('/').map(encodeURIComponent).join('/')}${download ? '?download' : ''}`;
@@ -37,6 +39,9 @@ function one(p) {
   if (VID.test(p)) return `<figure class="att att-vid"><video src="${fileUrl(p)}" controls preload="metadata"></video><figcaption><span>🎬 ${name}</span>${actions(p)}</figcaption></figure>`;
   if (AUD.test(p)) return `<figure class="att att-aud"><audio src="${fileUrl(p)}" controls preload="metadata"></audio><figcaption><span>🎵 ${name}</span>${actions(p)}</figcaption></figure>`;
   if (HTML.test(p)) return `<figure class="att att-html"><div class="html-frame"><iframe src="${fileUrl(p)}" sandbox loading="lazy" title="${name}"></iframe><button type="button" class="html-cover" data-file="${esc(p)}" aria-label="Phóng to"></button></div><figcaption><span>🌐 ${name}</span>${actions(p)}</figcaption></figure>`;
+  if (PDF.test(p)) return `<figure class="att att-pdf"><iframe src="${fileUrl(p)}#toolbar=0&navpanes=0&view=FitH" loading="lazy" title="${name}"></iframe><figcaption><span>📕 ${name}</span><button type="button" class="att-btn" data-file="${esc(p)}">⤢ Mở lớn</button>${actions(p)}</figcaption></figure>`;
+  // 3D: ảnh xem trước (nếu có <tên>.png cạnh mô hình) + bấm để xoay xem 3D
+  if (M3D.test(p)) return `<figure class="att att-3d"><button type="button" class="m3d-cover" data-file="${esc(p)}"><img src="${fileUrl(p.replace(M3D, '.png'))}" alt="" loading="lazy" class="m3d-thumb"><span class="m3d-badge">🧊 Xem 3D · xoay được</span></button><figcaption><span>🧊 ${name}</span>${actions(p)}</figcaption></figure>`;
   if (DOC.test(p)) return `<div class="att att-doc" data-doc="${esc(p)}"><header>📄 <b>${name}</b>${actions(p)}</header><div class="doc-body">Đang tải…</div><button type="button" class="att-btn doc-more" data-file="${esc(p)}">Xem đầy đủ</button></div>`;
   return `<div class="att att-file"><header>📎 <b>${name}</b>${actions(p)}</header></div>`;
 }
@@ -68,13 +73,15 @@ function dirItems(files) {
   return files.map((f) => {
     const p = f.path;
     if (IMG.test(p)) return `<button type="button" class="dir-thumb" data-file="${esc(p)}" title="${esc(f.name)}"><img src="${fileUrl(p)}" alt="" loading="lazy"><span>${esc(f.name)}</span></button>`;
-    const icon = VID.test(p) ? '🎬' : HTML.test(p) ? '🌐' : DOC.test(p) ? '📄' : '📎';
+    const icon = VID.test(p) ? '🎬' : HTML.test(p) ? '🌐' : PDF.test(p) ? '📕' : M3D.test(p) ? '🧊' : DOC.test(p) ? '📄' : '📎';
     return `<span class="dir-file"><button type="button" class="link" data-file="${esc(p)}">${icon} ${esc(f.name)}</button><small>${kb(f.size)}</small><a href="${fileUrl(p, true)}" download title="Tải file gốc">⬇</a></span>`;
   }).join('');
 }
 
 // Điền nội dung cho các thẻ file vừa được vẽ (đọc Markdown, liệt kê thư mục)
 export function hydrate(root) {
+  // ảnh xem trước 3D không có thì ẩn đi, chỉ để nút "Xem 3D"
+  root.querySelectorAll('img.m3d-thumb:not([data-ready])').forEach((im) => { im.dataset.ready = '1'; im.addEventListener('error', () => im.remove(), { once: true }); });
   root.querySelectorAll('[data-doc]:not([data-ready])').forEach(async (el) => {
     el.dataset.ready = '1';
     const p = el.dataset.doc;
@@ -123,9 +130,69 @@ export async function openViewer(p) {
   if (IMG.test(p)) return openModal(head + `<div class="viewer-media"><img src="${fileUrl(p)}" alt="${name}"></div>`, true);
   if (VID.test(p)) return openModal(head + `<div class="viewer-media"><video src="${fileUrl(p)}" controls autoplay></video></div>`, true);
   if (HTML.test(p)) return openModal(head + `<iframe class="viewer-frame" src="${fileUrl(p)}" sandbox title="${name}"></iframe>`, true);
+  if (PDF.test(p)) return openModal(head + `<iframe class="viewer-frame" src="${fileUrl(p)}" title="${name}"></iframe>`, true);
+  if (M3D.test(p)) {
+    const body = openModal(head + '<div class="viewer-3d"><span class="hint">Đang tải mô hình 3D…</span></div><p class="hint">Kéo để xoay · lăn chuột để phóng to · chuột phải để dời</p>', true);
+    return show3D(body.querySelector('.viewer-3d'), p);
+  }
   const body = openModal(head + '<div class="viewer-doc">Đang tải…</div>', true);
   try { body.querySelector('.viewer-doc').innerHTML = renderDoc(p, await getText(p)); }
   catch { body.querySelector('.viewer-doc').innerHTML = '<span class="hint">Không đọc được file này trên web — anh bấm "Tải file gốc" để mở bằng phần mềm trên máy.</span>'; }
+}
+
+// Trình xem 3D trong cửa sổ: GLB/GLTF/OBJ/STL, xoay bằng chuột. Dừng vẽ khi đóng cửa sổ.
+async function show3D(box, p) {
+  try {
+    const THREE = await import('three');
+    const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+    const ext = p.split('.').pop().toLowerCase();
+    let object;
+    if (ext === 'glb' || ext === 'gltf') {
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      object = (await new GLTFLoader().loadAsync(fileUrl(p))).scene;
+    } else if (ext === 'obj') {
+      const { OBJLoader } = await import('three/addons/loaders/OBJLoader.js');
+      object = await new OBJLoader().loadAsync(fileUrl(p));
+      object.traverse((o) => { if (o.isMesh && (!o.material || o.material.type === 'MeshPhongMaterial')) o.material = new THREE.MeshStandardMaterial({ color: '#d9cfc0', roughness: 0.6 }); });
+    } else {
+      const { STLLoader } = await import('three/addons/loaders/STLLoader.js');
+      const geo = await new STLLoader().loadAsync(fileUrl(p));
+      geo.computeVertexNormals();
+      object = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#d9cfc0', roughness: 0.6 }));
+    }
+    box.innerHTML = '';
+    const w = box.clientWidth || 800, h = Math.min(window.innerHeight - 220, 620);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(w, h);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.setClearColor('#f2ede5');
+    box.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.add(object);
+    scene.add(new THREE.HemisphereLight('#fff8ee', '#cbbba4', 1.5));
+    const sun = new THREE.DirectionalLight('#ffffff', 2.2);
+    scene.add(sun);
+    const bbox = new THREE.Box3().setFromObject(object);
+    const c = bbox.getCenter(new THREE.Vector3()), size = bbox.getSize(new THREE.Vector3());
+    const d = Math.max(size.x, size.y, size.z) || 1;
+    sun.position.set(3, 5, 4).multiplyScalar(d);
+    const cam = new THREE.PerspectiveCamera(35, w / h, d / 100, d * 100);
+    cam.position.copy(c).add(new THREE.Vector3(1.2, 0.9, 1.4).multiplyScalar(d * 1.25));
+    const controls = new OrbitControls(cam, renderer.domElement);
+    controls.target.copy(c); controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 1.2;
+    renderer.domElement.addEventListener('pointerdown', () => (controls.autoRotate = false), { once: true });
+    let tris = 0; object.traverse((o) => { if (o.isMesh) { const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+    box.insertAdjacentHTML('beforeend', `<small class="m3d-info">${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} · ${Math.round(tris).toLocaleString('vi-VN')} tam giác</small>`);
+    const loop = () => {
+      if (!box.isConnected) { renderer.dispose(); return; } // cửa sổ đã đóng
+      controls.update(); renderer.render(scene, cam); requestAnimationFrame(loop);
+    };
+    loop();
+  } catch (e) {
+    box.innerHTML = `<span class="hint">Không mở được mô hình 3D (${esc(e.message || e)}). Anh bấm "Tải file gốc" để mở bằng phần mềm 3D trên máy.</span>`;
+  }
 }
 
 // Markdown tối giản (báo cáo của Lue, file .md nhân viên gửi)
