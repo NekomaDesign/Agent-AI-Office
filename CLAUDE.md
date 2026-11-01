@@ -155,6 +155,7 @@ nói file nào là gì.
 Công cụ xuất file (chỉ đọc và ghi trong `outputs/`, không gọi thẳng `msedge.exe`/`chrome.exe`):
 - PNG / PDF từ HTML/SVG: `node office/tools/render.mjs outputs/<taskId>/<file>.html|svg [--pdf] [--page a4] [--size WxH] [--scale 2] [--out ...]`
 - File 3D GLB/OBJ/STL + ảnh xem trước từ mô hình three.js: `node office/tools/export-3d.mjs outputs/<taskId>/<tên>.model.js [--format glb,obj,stl]`
+- Video MP4 / GIF từ HTML động (CSS animation, Web Animations, GSAP): `node office/tools/render-video.mjs outputs/<taskId>/<file>.html [--duration 10] [--fps 30] [--size WxH] [--gif | --frames]`. Khai báo `<meta name="motion-size" content="1440x1080">` và `<meta name="motion-duration" content="10">` trong HTML. Animation tự vẽ bằng JS thì định nghĩa `window.seek = (ms) => {…}`. Không gọi thẳng `ffmpeg`.
 - Không tự chạy script Blender/Python — script `.py` để anh tự chạy.
 
 ### 5. File & link anh gửi

@@ -176,6 +176,8 @@ function pump() {
 const TOOLS = 'Task,Read,Write,Edit,MultiEdit,Glob,Grep,TodoWrite,WebSearch,WebFetch,Bash(date:*),Bash(mkdir:*),Bash(ls:*),Bash(node office/tools/render-png.mjs:*),PowerShell(node office/tools/render-png.mjs *),' +
   // xuất PNG/PDF và mô hình 3D — chỉ đọc/ghi trong outputs/ (anh Nekoma đã cho phép)
   'Bash(node office/tools/render.mjs:*),PowerShell(node office/tools/render.mjs *),Bash(node office/tools/export-3d.mjs:*),PowerShell(node office/tools/export-3d.mjs *),' +
+  // xuất video MP4/GIF từ HTML động — chỉ đọc/ghi trong outputs/
+  'Bash(node office/tools/render-video.mjs:*),PowerShell(node office/tools/render-video.mjs *),' +
   // đọc link anh gửi (web, YouTube, Drive, Facebook công khai) — chặn mạng nội bộ
   'Bash(node office/tools/read-link.mjs:*),PowerShell(node office/tools/read-link.mjs *)';
 
