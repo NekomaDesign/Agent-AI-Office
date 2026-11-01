@@ -165,7 +165,8 @@ function pump() {
   runJob(job, true).finally(() => { runner.busy = false; runner.current = null; pump(); });
 }
 
-const TOOLS = 'Task,Read,Write,Edit,MultiEdit,Glob,Grep,TodoWrite,WebSearch,WebFetch,Bash(date:*),Bash(mkdir:*),Bash(ls:*)';
+// node office/tools/render-png.mjs: xuất PNG từ HTML/SVG, chỉ đọc/ghi trong outputs/ (anh Nekoma đã cho phép)
+const TOOLS = 'Task,Read,Write,Edit,MultiEdit,Glob,Grep,TodoWrite,WebSearch,WebFetch,Bash(date:*),Bash(mkdir:*),Bash(ls:*),Bash(node office/tools/render-png.mjs:*),PowerShell(node office/tools/render-png.mjs *)';
 
 function runJob(job, allowResume) {
   runner.busy = true;
