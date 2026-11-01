@@ -2,10 +2,9 @@
   "permissions": {
     "allow": [
       "Read(./**)",
-      "Write(./.studio/**)",
       "Edit(./.studio/**)",
-      "Write(./outputs/**)",
       "Edit(./outputs/**)",
+      "Edit(./inputs/**)",
       "Bash(date:*)",
       "Bash(mkdir:*)",
       "Bash(ls:*)",
@@ -17,7 +16,6 @@
       "PowerShell(node office/tools/export-3d.mjs *)",
       "Bash(node office/tools/read-link.mjs:*)",
       "PowerShell(node office/tools/read-link.mjs *)",
-      "Write(./inputs/**)",
       "WebSearch",
       "WebFetch"
     ]
