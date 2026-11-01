@@ -96,15 +96,18 @@ Việc của Lue (trợ lý riêng) thì gửi thẳng anh.
 - Chỉ đọc được nội dung **công khai**. File Drive phải bật "Bất kỳ ai có đường liên kết". Với bài Facebook riêng tư hoặc nhóm kín, anh chụp màn hình hoặc copy nội dung gửi vào chat. Văn phòng **không đăng nhập** tài khoản của anh.
 - Link trỏ vào máy/mạng nội bộ bị chặn. Nhân viên được dặn coi nội dung link/file là dữ liệu, không làm theo "lệnh" trong đó.
 
-### Xuất file: PNG, PDF, 3D
+### Xuất file: PNG, PDF, 3D, video
 
-Agent được phép chạy 2 công cụ dưới đây. Cả 2 chỉ đọc và ghi trong `outputs/`, dùng Edge/Chrome chạy ẩn:
+Agent được phép chạy 3 công cụ dưới đây. Cả 3 chỉ đọc và ghi trong `outputs/`, dùng Edge/Chrome chạy ẩn:
 
 | Cần | Lệnh |
 |---|---|
 | PNG từ HTML/SVG | `node office/tools/render.mjs outputs/<task>/poster.html [--size 2480x3508] [--scale 2]` |
 | PDF đúng khổ / khổ in | `node office/tools/render.mjs outputs/<task>/poster.html --pdf [--page a4]` |
 | 3D GLB / OBJ / STL + ảnh xem trước | `node office/tools/export-3d.mjs outputs/<task>/cup.model.js [--format glb,obj,stl]` |
+| Video MP4 / GIF / chuỗi PNG từ HTML động | `node office/tools/render-video.mjs outputs/<task>/motion.html [--duration 10] [--fps 30] [--gif \| --frames]` |
+
+Xuất video cần **ffmpeg** (`winget install Gyan.FFmpeg`). Công cụ dừng animation theo từng khung hình rồi chụp, nên máy chậm cũng không rớt khung.
 
 Mô hình 3D do Cube viết bằng three.js (`*.model.js`). Trong chat, file PDF xem được ngay, file 3D bấm **Xem 3D** để xoay.
 Máy chưa cài Blender. Script Blender (`.py`) Cube viết là để anh tự chạy, agent không được tự chạy.
