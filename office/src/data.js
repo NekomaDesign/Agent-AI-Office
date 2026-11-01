@@ -32,6 +32,8 @@ export function normalize(raw = {}) {
     chats,
     reports: Array.isArray(raw.reports) ? raw.reports : [],
     runner: raw.runner || null,
+    usage: raw.usage || null,
+    chatter: raw.runner ? raw.runner.chatter !== false : raw.chatter !== false,
   };
 }
 
@@ -108,7 +110,13 @@ export function startSource(onData, onMode) {
       }, 3000);
     });
   }
-  return { send, order, newSession, openFolder };
+  // bật/tắt kênh ☕ Tám chuyện (nhân viên tự nhắn nhau theo office/chatter.json)
+  async function setChatter(on) {
+    if (mode === 'demo' && demo) { demo.setChatter(on); onData(normalize(demo.snapshot())); return { ok: true }; }
+    return post('./api/chatter', { enabled: on });
+  }
+
+  return { send, order, newSession, openFolder, setChatter };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------
@@ -182,7 +190,20 @@ function createDemo() {
 
   const start = Date.now();
   const iso = (sec) => toLocalIso(new Date(start + sec * 1000));
-  const extra = []; // tin anh gõ trong bản demo
+  const extra = []; // tin anh gõ trong bản demo + tám chuyện
+  // bản demo cũng tám chuyện theo office/chatter.json
+  let chatterOn = true;
+  fetch('./chatter.json').then((r) => r.json()).then((script) => {
+    const threads = (script.threads || []).filter((t) => !t.when || t.when === 'any' || t.when === 'busy');
+    const play = () => {
+      if (chatterOn && threads.length) {
+        const t = threads[Math.floor(Math.random() * threads.length)];
+        t.lines.forEach(([from, to, text], i) => setTimeout(() => extra.push({ channel: 'tam-chuyen', msg: { from, to, text: text.replace(/\{(task:\w+|busyTask)\}/g, 'Autumn Café'), time: toLocalIso(new Date()), sim: true } }), i * 5000));
+      }
+      setTimeout(play, 25000 + Math.random() * 20000);
+    };
+    setTimeout(play, 6000);
+  }).catch(() => { /* không có kịch bản */ });
 
   const report = {
     name: 'lue-demo.md',
@@ -191,6 +212,7 @@ function createDemo() {
   };
 
   return {
+    setChatter(on) { chatterOn = on; },
     post(channel, text) {
       const m = text.match(/@([a-z]+)/i);
       const tag = m ? m[1].toLowerCase() : '';
@@ -230,6 +252,7 @@ function createDemo() {
         tasks: [...tasks.values()],
         chats,
         reports: T >= 52 ? [report] : [],
+        chatter: chatterOn,
       };
     },
   };

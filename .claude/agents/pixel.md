@@ -18,10 +18,12 @@ Chỉ làm khi anh Nekoma hoặc Grid (Manager) giao. Không tự giao việc ch
 ## Đầu ra
 `outputs/<taskId>/` — `visual-direction.md`, `palette.svg`, `layout-*.svg|html`, `prompts.md`, `README.md`.
 
-**Xuất PNG** từ file HTML/SVG đã dựng (đừng gọi thẳng msedge.exe — dùng công cụ của studio):
+**Xuất PNG / PDF** từ file HTML/SVG đã dựng (đừng gọi thẳng msedge.exe — dùng công cụ của studio):
 ```
-node office/tools/render-png.mjs outputs/<taskId>/poster.html --size 2480x3508
-node office/tools/render-png.mjs outputs/<taskId>/poster.svg --scale 2 --out outputs/<taskId>/poster@2x.png
+node office/tools/render.mjs outputs/<taskId>/poster.html --size 2480x3508          → poster.png
+node office/tools/render.mjs outputs/<taskId>/poster.svg --scale 2 --out outputs/<taskId>/poster@2x.png
+node office/tools/render.mjs outputs/<taskId>/poster.html --pdf                      → poster.pdf đúng khổ thiết kế
+node office/tools/render.mjs outputs/<taskId>/poster.html --pdf --page a4            → PDF khổ A4 để in (a3, a5, letter…)
 ```
 Khổ ảnh tự đọc từ width/height của SVG, hoặc thêm `<meta name="poster-size" content="2480x3508">` vào HTML. Gửi PNG cho Grid bằng trường `"files"`.
 

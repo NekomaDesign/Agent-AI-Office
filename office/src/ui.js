@@ -42,7 +42,12 @@ function allMessages(chats) {
 // ======================================================================
 const elapsed = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-export function createUI({ world, send, order, newSession, openFolder }) {
+const CHATTER = 'tam-chuyen'; // kênh giả lập: nhân viên tám chuyện theo office/chatter.json
+const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n || 0));
+const fmtUsd = (n) => '$' + (n || 0).toFixed(2);
+const fmtMin = (ms) => (ms >= 60000 ? `${Math.round(ms / 60000)} phút` : `${Math.round((ms || 0) / 1000)} giây`);
+
+export function createUI({ world, send, order, newSession, openFolder, setChatter }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -227,9 +232,36 @@ export function createUI({ world, send, order, newSession, openFolder }) {
   }
 
   // ---- data ----
+  // ---- usage Claude: ô trên thanh trên + bảng chi tiết ----
+  $('#usage-chip').addEventListener('click', () => openUsage());
+  function renderUsage() {
+    const chip = $('#usage-chip');
+    const u = data?.usage;
+    chip.hidden = !u;
+    if (!u) return;
+    chip.dataset.state = u.limit ? 'limit' : data.runner?.busy ? 'busy' : '';
+    chip.textContent = u.limit
+      ? `⛔ CLAUDE HẾT LƯỢT${u.limit.reset ? ` · RESET ${u.limit.reset.toUpperCase()}` : ''}`
+      : `✦ CLAUDE · ${u.today.runs} LƯỢT · ${fmtTok(u.today.tokens)} TOKEN`;
+  }
+  function openUsage() {
+    const u = data?.usage; if (!u) return;
+    const card = (title, s) => `<div class="us-card"><small>${title}</small><b>${s.runs} lượt</b><span>${s.ok}/${s.runs} thành công</span><span>${fmtTok(s.tokens)} token · ${fmtTok(s.output)} viết ra</span><span>${fmtUsd(s.cost)} quy đổi API · ${fmtMin(s.ms)}</span></div>`;
+    const kind = { order: '⚡ Giao việc', chat: '# all', review: 'Duyệt' };
+    openModal(`<div class="usage">
+      <h3>Claude của anh · lượt dùng từ văn phòng</h3>
+      ${u.limit ? `<p class="review-note err">⛔ Gói Claude đang hết lượt${u.limit.reset ? ` — reset lúc <b>${esc(u.limit.reset)}</b>` : ''}. Lệnh gửi lúc này sẽ báo lỗi, tới giờ reset anh gửi lại nhé.<br><small>${esc(u.limit.text || '')}</small></p>` : ''}
+      <div class="us-grid">${card('HÔM NAY', u.today)}${card('5 GIỜ QUA', u.last5h)}${card('7 NGÀY', u.last7d)}${card('TỪ TRƯỚC TỚI NAY', u.total)}</div>
+      <h4>LẦN CHẠY GẦN ĐÂY</h4>
+      ${u.recent.length ? `<div class="table-wrap"><table><thead><tr><th>LÚC</th><th>LOẠI</th><th>LỆNH</th><th>TOKEN</th><th>QUY ĐỔI</th><th>THỜI GIAN</th><th>KẾT QUẢ</th></tr></thead><tbody>${u.recent.map((r) => `<tr><td>${hhmm(r.time)} <small class="hint">${esc(r.time.slice(5, 10))}</small></td><td>${kind[r.kind] || esc(r.kind)}</td><td>${esc(r.text)}</td><td>${fmtTok(r.input + r.output + r.cacheRead + r.cacheWrite)}</td><td>${fmtUsd(r.cost)}</td><td>${fmtMin(r.durationMs)}</td><td>${r.ok ? '<span class="pill" data-s="done" style="--c:#2f9a5c">XONG</span>' : `<span class="pill" style="--c:#d93a2b">${r.limited ? 'HẾT LƯỢT' : 'LỖI'}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Chưa có lần chạy nào được ghi lại.</p>'}
+      <p class="hint">Chỉ tính các lần văn phòng gọi Claude chạy nền (kênh ⚡ Giao việc, tag ở # all, nút duyệt/góp ý). "Quy đổi API" là giá nếu trả theo API — gói Pro không bị tính số tiền này. Anthropic chưa cho đọc % hạn mức 5 giờ của gói Pro tự động; muốn xem chính xác, mở Claude Code và gõ <code>/usage</code>.</p>
+    </div>`, true);
+  }
+
   function update(d) {
     data = d;
     lastUpdate = new Date();
+    renderUsage();
     $('#studio-name').textContent = d.studio.name;
     $('#studio-tagline').textContent = d.studio.tagline;
     document.title = `${d.studio.name} · Agent Office`;
@@ -379,7 +411,7 @@ export function createUI({ world, send, order, newSession, openFolder }) {
     const last = msgs.slice(-3).reverse();
     $('#mini-list').innerHTML = last.length ? last.map((m) => {
       const p = PEOPLE[m.from] || { color: '#888' };
-      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># all</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p>${filesOf(m).length ? `<small class="mini-files">📎 ${filesOf(m).length} tệp — mở Chat công ty để xem</small>` : ''}</div></li>`;
+      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># all</i>' : m.taskId === CHATTER ? ' · <i>☕ tám</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p>${filesOf(m).length ? `<small class="mini-files">📎 ${filesOf(m).length} tệp — mở Chat công ty để xem</small>` : ''}</div></li>`;
     }).join('') : '<li class="mini-empty">Chưa có tin nhắn nào.</li>';
   }
 
@@ -415,6 +447,7 @@ export function createUI({ world, send, order, newSession, openFolder }) {
   function threadTitle(id) {
     if (id === COMPANY) return { project: 'CẢ CÔNG TY', title: 'all' };
     if (id === ORDERS) return { project: 'CLAUDE CHẠY THẬT', title: '⚡ Giao việc' };
+    if (id === CHATTER) return { project: 'GIẢ LẬP · KHÔNG PHẢI VIỆC THẬT', title: '☕ Tám chuyện' };
     const t = data.tasks.find((x) => x.id === id);
     if (t) return { project: t.project || '', title: t.title || id };
     if (id === 'studio-welcome') return { project: 'STUDIO', title: 'Chào mừng' };
@@ -474,6 +507,10 @@ export function createUI({ world, send, order, newSession, openFolder }) {
         paintStatus(hint);
       } finally { btn.disabled = false; }
     });
+    $('#room-head').addEventListener('click', async (e) => {
+      if (!e.target.closest('#chatter-toggle')) return;
+      try { await setChatter(!data.chatter); } catch (err) { miniToast(`Chưa đổi được: ${err.message}`, true); }
+    });
     $('#ch-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-t]'); if (!b) return;
       channel = b.dataset.t; renderChat(); scrollMsgs(true);
@@ -493,28 +530,33 @@ export function createUI({ world, send, order, newSession, openFolder }) {
   function renderChat() {
     if (!data) return;
     if (!$('#composer')) buildChatShell();
-    const threads = Object.entries(data.chats).filter(([id, l]) => l.length && id !== COMPANY && id !== ORDERS)
+    const threads = Object.entries(data.chats).filter(([id, l]) => l.length && id !== COMPANY && id !== ORDERS && id !== CHATTER)
       .sort((a, b) => String(b[1].at(-1).time).localeCompare(String(a[1].at(-1).time)));
     const company = data.chats[COMPANY] || [];
-    const total = Object.values(data.chats).reduce((n, l) => n + l.length, 0);
-    if (channel !== 'all' && channel !== COMPANY && channel !== ORDERS && !data.chats[channel]) channel = COMPANY;
+    // "Tất cả hoạt động" chỉ gồm việc thật, không tính tám chuyện giả lập
+    const real = Object.fromEntries(Object.entries(data.chats).filter(([id]) => id !== CHATTER));
+    const total = Object.values(real).reduce((n, l) => n + l.length, 0);
+    if (channel !== 'all' && channel !== COMPANY && channel !== ORDERS && channel !== CHATTER && !data.chats[channel]) channel = COMPANY;
     $('#chat-eyebrow').textContent = `${data.studio.name} · KHU E · ${ZONES.E.name.toUpperCase()}`;
 
     const chBtn = (id, label, sub, n) => `<button class="channel ${channel === id ? 'active' : ''}" data-t="${esc(id)}"><b>${label}</b><small>${esc(sub)}</small>${n ? `<span class="n">${n}</span>` : ''}</button>`;
     $('#ch-list').innerHTML = `<div class="ch-title">KÊNH</div>` +
       chBtn(COMPANY, '# all', 'Cả công ty · tag để được trả lời', company.length) +
       chBtn(ORDERS, '⚡ Giao việc', 'Claude Code làm thật', (data.chats[ORDERS] || []).length) +
+      chBtn(CHATTER, '☕ Tám chuyện', data.chatter ? 'Team tám Gen Z · giả lập' : 'Đang tắt', (data.chats[CHATTER] || []).length) +
       chBtn('all', '◎ Tất cả hoạt động', 'Mọi kênh gộp lại', total) +
       `<div class="ch-title">VIỆC (${threads.length})</div>` +
       threads.map(([id, l]) => { const tt = threadTitle(id); return chBtn(id, `# ${esc(tt.title)}`, tt.project, l.length); }).join('');
 
     let shown;
-    if (channel === 'all') shown = Object.entries(data.chats).filter(([, l]) => l.length);
+    if (channel === 'all') shown = Object.entries(real).filter(([, l]) => l.length);
     else shown = [[channel, data.chats[channel] || []]];
     const list = channel === 'all' ? allMessages(Object.fromEntries(shown)) : shown[0][1].map((m) => ({ ...m, taskId: channel }));
     const tt = threadTitle(channel === 'all' ? COMPANY : channel);
     $('#room-head').innerHTML = channel === 'all'
       ? `<b>◎ Tất cả hoạt động</b><small>${total} tin từ mọi kênh · gửi tin ở đây sẽ vào # all</small>`
+      : channel === CHATTER
+        ? `<div class="room-row"><div><b>☕ Tám chuyện</b><small>Giả lập: nhân viên tự nhắn nhau theo kịch bản <code>office/chatter.json</code> — không tốn lượt Claude, không phải việc thật</small></div><button type="button" class="btn-mini ${data.chatter ? '' : 'hot'}" id="chatter-toggle">${data.chatter ? '⏸ Tạm tắt' : '▶ Bật lại'}</button></div>`
       : channel === ORDERS
         ? `<b>⚡ Giao việc</b><small>Gõ ở đây là Claude Code trên máy chạy thật: gọi "Grid ơi…" để giao trọn gói, hoặc gọi thẳng tên từng bạn</small>`
         : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Cả công ty · tag @tên để người đó trả lời, @all để cả team (Grid thay mặt) trả lời · không tag thì chỉ ghi lại' : esc(tt.project)}</small>`;

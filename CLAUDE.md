@@ -110,6 +110,11 @@ LUỒNG DUYỆT. Khi CD cho nghỉ hoặc bắt đầu việc mới → về `id
   video, SVG, HTML, Markdown ngay trong chat, kèm nút tải file gốc, tải cả bộ .zip và mở thư mục.
   Ghi đường dẫn bắt đầu bằng `outputs/`. Ghi cả thư mục (`outputs/<taskId>/`) nếu muốn gửi cả bộ.
 
+### 2a. Kênh ☕ Tám chuyện — `.studio/chat/tam-chuyen.jsonl` (GIẢ LẬP)
+
+Server tự sinh hội thoại vui giữa nhân viên theo kịch bản `office/chatter.json` (dòng có `"sim": true`).
+Đây **không phải** lời giao việc hay góp ý thật: KHÔNG đọc kênh này khi làm việc, KHÔNG ghi vào file này.
+
 ### 2b. Kênh # all — `.studio/chat/company.jsonl`
 
 Kênh nhóm của cả công ty (tab **Chat công ty** → `# all`), CD gõ tin trực tiếp ở đó.
@@ -147,8 +152,10 @@ Markdown cho văn bản (`brief-analysis.md`, `headlines.md`, `storyboard.md`…
 Blender, `.jsx` cho script After Effects, `.svg/.html` cho layout. Luôn kèm `README.md` ngắn
 nói file nào là gì.
 
-Xuất ảnh PNG từ HTML/SVG: `node office/tools/render-png.mjs outputs/<taskId>/<file>.html|svg [--size WxH] [--scale 2] [--out outputs/.../x.png]`.
-Công cụ chỉ đọc và ghi trong `outputs/`. Không gọi thẳng `msedge.exe`/`chrome.exe`.
+Công cụ xuất file (chỉ đọc và ghi trong `outputs/`, không gọi thẳng `msedge.exe`/`chrome.exe`):
+- PNG / PDF từ HTML/SVG: `node office/tools/render.mjs outputs/<taskId>/<file>.html|svg [--pdf] [--page a4] [--size WxH] [--scale 2] [--out ...]`
+- File 3D GLB/OBJ/STL + ảnh xem trước từ mô hình three.js: `node office/tools/export-3d.mjs outputs/<taskId>/<tên>.model.js [--format glb,obj,stl]`
+- Không tự chạy script Blender/Python — script `.py` để anh tự chạy.
 
 ### Thời gian
 

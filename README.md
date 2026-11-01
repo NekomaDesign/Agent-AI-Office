@@ -83,6 +83,31 @@ Tab **Chat công ty** giống Slack: kênh `# all` cho cả công ty, kênh **�
 Nhân viên làm xong → **Grid duyệt trước** (trạng thái *GRID DUYỆT*). Đạt rồi Grid mới gửi anh **bản cuối** (*CHỜ ANH DUYỆT*).
 Ở **Bảng công việc** bấm **Xem & duyệt**: xem toàn bộ file, rồi **Duyệt bản cuối** hoặc **Gửi góp ý cho Grid**. Grid chuyển góp ý cho đúng người sửa.
 Việc của Lue (trợ lý riêng) thì gửi thẳng anh.
+
+### Xuất file: PNG, PDF, 3D
+
+Agent được phép chạy 2 công cụ dưới đây. Cả 2 chỉ đọc và ghi trong `outputs/`, dùng Edge/Chrome chạy ẩn:
+
+| Cần | Lệnh |
+|---|---|
+| PNG từ HTML/SVG | `node office/tools/render.mjs outputs/<task>/poster.html [--size 2480x3508] [--scale 2]` |
+| PDF đúng khổ / khổ in | `node office/tools/render.mjs outputs/<task>/poster.html --pdf [--page a4]` |
+| 3D GLB / OBJ / STL + ảnh xem trước | `node office/tools/export-3d.mjs outputs/<task>/cup.model.js [--format glb,obj,stl]` |
+
+Mô hình 3D do Cube viết bằng three.js (`*.model.js`). Trong chat, file PDF xem được ngay, file 3D bấm **Xem 3D** để xoay.
+Máy chưa cài Blender. Script Blender (`.py`) Cube viết là để anh tự chạy, agent không được tự chạy.
+
+### Lượt dùng Claude
+
+Ô **✦ CLAUDE** trên thanh trên cùng cho biết số lượt và token văn phòng đã dùng hôm nay. Khi gói Claude hết lượt, ô chuyển đỏ kèm giờ reset.
+Bấm vào ô để xem chi tiết: hôm nay, 5 giờ qua, 7 ngày, các lần chạy gần đây. Số liệu ghi ở `.studio/usage.jsonl`.
+Ô này chỉ tính các lần văn phòng gọi Claude chạy nền. % hạn mức chính xác của gói Pro thì xem bằng lệnh `/usage` trong Claude Code.
+
+### ☕ Tám chuyện (giả lập)
+
+Nhân viên tự nhắn nhau kiểu Gen Z nhưng đúng chuyện nghề, kể cả khi không có việc. Kênh **☕ Tám chuyện** có nút tắt/bật.
+Kịch bản nằm ở [`office/chatter.json`](office/chatter.json): sửa câu, thêm đoạn hoặc chỉnh tần suất ngay trong file.
+Phần này không gọi Claude nên không tốn lượt dùng. Agent cũng được dặn bỏ qua kênh này khi làm việc.
 Sản phẩm nằm trong `outputs/<tên-task>/`. Khi anh nói "duyệt" hoặc "ok", agent chuyển sang **ĐÃ XONG**.
 
 ## Cấu trúc

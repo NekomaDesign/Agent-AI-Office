@@ -11,6 +11,10 @@
       "Bash(ls:*)",
       "Bash(node office/tools/render-png.mjs:*)",
       "PowerShell(node office/tools/render-png.mjs *)",
+      "Bash(node office/tools/render.mjs:*)",
+      "PowerShell(node office/tools/render.mjs *)",
+      "Bash(node office/tools/export-3d.mjs:*)",
+      "PowerShell(node office/tools/export-3d.mjs *)",
       "WebSearch",
       "WebFetch"
     ]
