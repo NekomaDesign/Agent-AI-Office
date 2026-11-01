@@ -22,11 +22,12 @@ async function boot() {
   });
   ui = createUI({
     world,
-    send: (channel, text) => source.send(channel, text),
-    order: (text) => source.order(text),
+    send: (channel, text, files) => source.send(channel, text, files),
+    order: (text, files) => source.order(text, files),
     newSession: () => source.newSession(),
     openFolder: (p) => source.openFolder(p),
     setChatter: (on) => source.setChatter(on),
+    upload: (file) => source.upload(file),
   });
   ui.select('cd', false);
 

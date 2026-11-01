@@ -1,6 +1,6 @@
 // Giao diện 2D: sidebar, hồ sơ nhân viên, mini chat, bảng công việc, chat công ty, phòng Lue, toast.
 import { AGENTS, CD, PEOPLE, STATES, ZONES, COMPANY, ORDERS } from './agents.js';
-import { FILE_RE, filesOf, attachHtml, hydrate, openViewer, openModal, md } from './files.js';
+import { FILE_RE, URL_RE, filesOf, attachHtml, linksOf, linkHtml, hydrate, openViewer, openModal, md } from './files.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -31,7 +31,8 @@ const richText = (t) => esc(t).replace(/@([a-zà-ỹ]+)/gi, (m, n) => {
   if (id === 'all' || id === 'team') return '<span class="mention" style="--c:#1d1c19">@all</span>';
   const p = PEOPLE[id];
   return p ? `<span class="mention" style="--c:${p.color}">@${esc(p.name)}</span>` : m;
-}).replace(FILE_RE, (p) => `<button type="button" class="fpath" data-file="${p}">${p}</button>`);
+}).replace(URL_RE, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer" class="slink">${u.length > 60 ? u.slice(0, 57) + '…' : u}</a>`)
+  .replace(/(<a [^>]*>[\s\S]*?<\/a>)|((?:outputs|inputs)\/[^\s"'`<>()[\]]+)/g, (m, a, p) => a || `<button type="button" class="fpath" data-file="${p}">${p}</button>`);
 
 function allMessages(chats) {
   const out = [];
@@ -47,7 +48,7 @@ const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Mat
 const fmtUsd = (n) => '$' + (n || 0).toFixed(2);
 const fmtMin = (ms) => (ms >= 60000 ? `${Math.round(ms / 60000)} phút` : `${Math.round((ms || 0) / 1000)} giây`);
 
-export function createUI({ world, send, order, newSession, openFolder, setChatter }) {
+export function createUI({ world, send, order, newSession, openFolder, setChatter, upload }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -190,8 +191,8 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
     if (r.html) el.innerHTML = r.html; else el.textContent = r.text;
     if (r.ok && r.session && !r.busy && el.id === 'composer-hint') el.insertAdjacentHTML('beforeend', ' <button type="button" class="cs-new" id="cs-new">Phiên mới</button>');
   }
-  async function giveOrder(text) {
-    const res = await order(text);
+  async function giveOrder(text, files = []) {
+    const res = await order(text, files);
     flash = { text: res.queue > 0 ? `Đã xếp hàng · còn ${res.queue} lệnh phía trước` : 'Đã gửi · Claude đang nhận việc…', until: Date.now() + 4000 };
   }
   document.addEventListener('click', async (e) => {
@@ -464,7 +465,8 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
           <div class="msgs" id="msgs"></div>
           <form class="composer" id="composer">
             <div class="mention-row" id="mention-row"></div>
-            <div class="composer-box"><textarea id="composer-input" rows="2" placeholder="Nhắn # all… tag @Grid, @Ink hoặc @all để được trả lời"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
+            <div class="composer-files" id="composer-files" hidden></div>
+            <div class="composer-box"><button type="button" class="attach-btn" id="attach-btn" title="Gửi file / ảnh (hoặc dán Ctrl+V, kéo thả vào đây)">📎</button><input type="file" id="attach-input" multiple hidden><textarea id="composer-input" rows="2" placeholder="Nhắn # all… tag @Grid, @Ink hoặc @all để được trả lời"></textarea><button type="submit" id="composer-send">Gửi ↵</button></div>
             <small class="composer-hint" id="composer-hint" data-base="composer-hint"></small>
           </form>
         </section>
@@ -476,6 +478,37 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
       insertName(b.dataset.n);
     });
     const ta = $('#composer-input');
+    // ---- file chờ gửi: 📎, dán ảnh (Ctrl+V), kéo thả ----
+    let pending = [];
+    const kbs = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    function drawPending() {
+      const box = $('#composer-files');
+      box.hidden = !pending.length;
+      box.innerHTML = pending.map((p, i) => `<span class="pend">${p.thumb ? `<img src="${p.thumb}" alt="">` : '📎'}<b>${esc(p.file.name)}</b><small>${kbs(p.file.size)}</small><button type="button" data-rm="${i}" aria-label="Bỏ file">×</button></span>`).join('');
+    }
+    function addFiles(list) {
+      for (const f of list) {
+        if (pending.length >= 10) break;
+        if (f.size > 100 * 1024 * 1024) { miniToast(`${f.name}: quá 100 MB`, true); continue; }
+        const file = f.name ? f : new File([f], `dan-anh-${Date.now()}.png`, { type: f.type });
+        pending.push({ file, thumb: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' });
+      }
+      drawPending(); ta.focus();
+    }
+    $('#attach-btn').addEventListener('click', () => $('#attach-input').click());
+    $('#attach-input').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
+    $('#composer-files').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rm]'); if (!b) return;
+      const [p] = pending.splice(+b.dataset.rm, 1); if (p?.thumb) URL.revokeObjectURL(p.thumb); drawPending();
+    });
+    ta.addEventListener('paste', (e) => {
+      const files = [...(e.clipboardData?.files || [])];
+      if (files.length) { e.preventDefault(); addFiles(files.map((f, i) => (f.name && f.name !== 'image.png' ? f : new File([f], `dan-anh-${Date.now()}-${i}.png`, { type: f.type })))); }
+    });
+    const room = $('#view-chat .room');
+    room.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); room.classList.add('drop'); } });
+    room.addEventListener('dragleave', (e) => { if (!room.contains(e.relatedTarget)) room.classList.remove('drop'); });
+    room.addEventListener('drop', (e) => { if (!e.dataTransfer?.files?.length) return; e.preventDefault(); room.classList.remove('drop'); addFiles([...e.dataTransfer.files]); });
     // kênh ⚡ Giao việc: chèn "Ink ơi, …"; kênh khác: chèn "@Ink"
     function insertName(n) {
       if (channel === ORDERS) ta.value = `${n} ơi, ` + ta.value.replace(/^\S+ ơi, /, '');
@@ -486,20 +519,27 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
     $('#composer').addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = ta.value.trim();
-      if (!text) return;
+      if (!text && !pending.length) return;
       const hint = $('#composer-hint');
       const btn = $('#composer-send');
       btn.disabled = true;
       try {
-        if (channel === ORDERS) await giveOrder(text);
+        // tải file lên trước, rồi gửi tin kèm đường dẫn
+        const files = [];
+        for (const [i, p] of pending.entries()) {
+          hint.className = 'composer-hint'; hint.textContent = `Đang tải lên ${i + 1}/${pending.length}: ${p.file.name}…`;
+          files.push(await upload(p.file));
+        }
+        if (channel === ORDERS) await giveOrder(text, files);
         else {
-          const res = await send(channel === 'all' ? COMPANY : channel, text);
+          const res = await send(channel === 'all' ? COMPANY : channel, text, files);
           const toAll = channel === COMPANY || channel === 'all';
           flash = { text: res?.reply ? `Đã gửi · người được tag đang trả lời${res.queue ? ` (còn ${res.queue} việc phía trước)` : ''}…`
             : mode === 'demo' ? 'Đã gửi (bản demo — chỉ hiện trên máy này).'
             : toAll ? 'Đã gửi · tag @tên hoặc @all để được trả lời.' : 'Đã gửi · chỉ ghi lại. Muốn agent làm thật thì gửi ở kênh ⚡ Giao việc.', until: Date.now() + 6000 };
         }
         ta.value = '';
+        pending.forEach((p) => p.thumb && URL.revokeObjectURL(p.thumb)); pending = []; drawPending();
         paintStatus(hint);
         scrollMsgs(true);
       } catch (err) {
@@ -573,7 +613,7 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
       const toMe = m.to === 'cd' ? ' to-me' : '';
       return sep + `<div class="smsg ${cont ? 'cont' : ''}${toMe}">${cont ? '<span class="avatar-gap"></span>' : avatar(m.from)}<div class="smsg-body">
         ${cont ? '' : `<div class="smeta"><b style="--c:${p.color}">${esc(nameOf(m.from))}</b><span class="role">${esc(p.role || '')}</span><time>${hhmm(m.time)}</time>${m.to && m.to !== 'team' ? `<span class="to">→ ${esc(nameOf(m.to))}</span>` : ''}${where}</div>`}
-        <div class="stext">${richText(m.text)}</div>${attachHtml(filesOf(m))}</div></div>`;
+        ${m.text ? `<div class="stext">${richText(m.text)}</div>` : ''}${attachHtml(filesOf(m))}${linkHtml(linksOf(m))}</div></div>`;
     }).join('') : channel === ORDERS
       ? `<div class="empty"><b>Chưa có lệnh nào</b>Gõ ví dụ <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code> — Claude sẽ chuyển việc cho đúng người.</div>`
       : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Muốn agent làm việc thật thì dùng kênh <b>⚡ Giao việc</b>.</div>`;

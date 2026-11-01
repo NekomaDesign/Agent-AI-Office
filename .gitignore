@@ -10,6 +10,7 @@
 .studio/usage.jsonl
 !.studio/archive/.gitkeep
 outputs/*
+inputs/
 !outputs/.gitkeep
 
 # Ảnh tham khảo cá nhân

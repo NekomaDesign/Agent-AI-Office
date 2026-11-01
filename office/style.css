@@ -483,3 +483,38 @@ button.person:hover { text-decoration: underline; }
 .viewer-3d canvas { display: block; }
 .m3d-info { position: absolute; right: 10px; bottom: 8px; font: 600 11px var(--mono); color: var(--ink-2); background: rgba(255,255,255,.8); padding: 3px 7px; border-radius: 6px; }
 @media (max-width: 820px) { .us-grid { grid-template-columns: 1fr 1fr; } .att-pdf, .att-3d { width: 100%; } }
+
+/* ======================================================================
+   Gửi file/ảnh trong chat · link bấm được + thẻ xem trước
+   ====================================================================== */
+.attach-btn { flex: none; align-self: flex-end; border: 0; background: transparent; font-size: 18px; line-height: 1; padding: 8px 4px 8px 0; cursor: pointer; opacity: .75; }
+.attach-btn:hover { opacity: 1; transform: rotate(-12deg); }
+.composer-files { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.composer-files[hidden] { display: none; }
+.pend { display: inline-flex; align-items: center; gap: 6px; max-width: 260px; border: 1px solid var(--line); background: var(--paper-2); border-radius: 10px; padding: 4px 6px 4px 4px; font-size: 12px; }
+.pend img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; }
+.pend b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pend small { color: var(--ink-3); font: 500 10.5px var(--mono); flex: none; }
+.pend button { border: 0; background: #e9e3d8; border-radius: 50%; width: 20px; height: 20px; line-height: 1; flex: none; }
+.pend button:hover { background: var(--ink); color: #fff; }
+.room.drop { outline: 3px dashed var(--orange); outline-offset: -10px; background: #fff7f0; }
+.room.drop::after { content: 'Thả file vào đây để gửi'; position: absolute; inset: 0; display: grid; place-items: center; font: 800 20px var(--font); color: var(--orange); pointer-events: none; }
+.room { position: relative; }
+.slink { color: #1f5fd1; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+.links { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; }
+.lnk { max-width: 520px; }
+.lnk-card { display: grid; grid-template-columns: 120px 1fr; background: #fff; border: 1px solid var(--line); border-left: 4px solid #8fa4c9; border-radius: 12px; overflow: hidden; }
+.lnk-card > img { width: 120px; height: 100%; min-height: 90px; object-fit: cover; background: #f3eee6; }
+.lnk-card:not(:has(> img)) { grid-template-columns: 1fr; }
+.lnk-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lnk-body b { font-size: 14px; line-height: 1.35; }
+.lnk-body p { margin: 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lnk-body .att-btn { align-self: flex-start; margin-top: 4px; }
+.lnk-site { font: 600 10.5px var(--mono); color: var(--ink-3); letter-spacing: .04em; }
+.lnk-youtube { display: block; border-left-color: #ff0033; max-width: 480px; }
+.lnk-yt { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.lnk-yt iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.lnk-drive { border-left-color: #1fa463; }
+.lnk-facebook { border-left-color: #1877f2; }
+.lnk-plain { display: block; border: 0; background: none; }
+.lnk-url { color: #1f5fd1; font-size: 13px; word-break: break-all; }
