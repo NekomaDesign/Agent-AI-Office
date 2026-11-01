@@ -70,19 +70,28 @@ export function startSource(onData, onMode) {
     setInterval(tick, 1000);
   }
 
-  async function send(channel, text) {
+  // tải 1 file lên server (lưu ở inputs/) → trả về đường dẫn để gửi kèm tin nhắn
+  async function upload(file) {
+    if (mode !== 'live') throw new Error('chỉ gửi file được khi chạy start-studio.bat trên máy');
+    const r = await fetch(`./api/upload?name=${encodeURIComponent(file.name || 'file')}`, { method: 'POST', headers: { 'X-Studio': '1' }, body: file });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok || !res.ok) throw new Error(res.error || `lỗi ${r.status}`);
+    return res.path;
+  }
+
+  async function send(channel, text, files = []) {
     if (mode === 'demo' && demo) {
       demo.post(channel, text);
       onData(normalize(demo.snapshot()));
       return { ok: true };
     }
-    return post('./api/chat', { channel, text });
+    return post('./api/chat', { channel, text, files });
   }
 
   // Giao việc thật: server gọi Claude Code chạy nền (chỉ có ở chế độ LIVE)
-  async function order(text) {
+  async function order(text, files = []) {
     if (mode !== 'live') throw new Error('chỉ giao việc được khi chạy start-studio.bat trên máy');
-    return post('./api/order', { text });
+    return post('./api/order', { text, files });
   }
   const newSession = () => post('./api/session/new', {});
   // mở thư mục chứa file trong Explorer trên máy anh
@@ -116,7 +125,7 @@ export function startSource(onData, onMode) {
     return post('./api/chatter', { enabled: on });
   }
 
-  return { send, order, newSession, openFolder, setChatter };
+  return { send, order, newSession, openFolder, setChatter, upload };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------

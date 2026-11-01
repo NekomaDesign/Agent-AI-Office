@@ -3,7 +3,8 @@
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export const FILE_RE = /outputs\/[^\s"'`<>()[\]]+/g;
+export const FILE_RE = /(?<![\w/.])(?:outputs|inputs)\/[^\s"'`<>()[\]]+/g;
+export const URL_RE = /https?:\/\/[^\s<>"'`]+[^\s<>"'`.,;:!?)\]]/g;
 const IMG = /\.(png|jpe?g|webp|gif|svg|avif)$/i;
 const VID = /\.(mp4|webm|mov)$/i;
 const AUD = /\.(mp3|wav|ogg)$/i;
@@ -22,7 +23,7 @@ const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(
 export function filesOf(m) {
   const set = new Set(Array.isArray(m.files) ? m.files.map(String) : []);
   for (const x of String(m.text || '').match(FILE_RE) || []) set.add(x.replace(/[.,;:!?…]+$/, ''));
-  return [...set].filter((p) => p.startsWith('outputs/') && !p.includes('..'));
+  return [...set].filter((p) => /^(outputs|inputs)\//.test(p) && !p.includes('..'));
 }
 
 function actions(p) {
@@ -44,6 +45,24 @@ function one(p) {
   if (M3D.test(p)) return `<figure class="att att-3d"><button type="button" class="m3d-cover" data-file="${esc(p)}"><img src="${fileUrl(p.replace(M3D, '.png'))}" alt="" loading="lazy" class="m3d-thumb"><span class="m3d-badge">🧊 Xem 3D · xoay được</span></button><figcaption><span>🧊 ${name}</span>${actions(p)}</figcaption></figure>`;
   if (DOC.test(p)) return `<div class="att att-doc" data-doc="${esc(p)}"><header>📄 <b>${name}</b>${actions(p)}</header><div class="doc-body">Đang tải…</div><button type="button" class="att-btn doc-more" data-file="${esc(p)}">Xem đầy đủ</button></div>`;
   return `<div class="att att-file"><header>📎 <b>${name}</b>${actions(p)}</header></div>`;
+}
+
+// ---- link trong tin nhắn: thẻ xem trước (server đọc tiêu đề/ảnh, YouTube xem ngay) ----
+export function linksOf(m) {
+  return [...new Set(String(m.text || '').replace(/&amp;/g, '&').match(URL_RE) || [])].slice(0, 3);
+}
+export function linkHtml(urls) {
+  return urls.length ? `<div class="links">${urls.map((u) => `<div class="lnk" data-link="${esc(u)}"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="lnk-url">🔗 ${esc(u.replace(/^https?:\/\//, '').slice(0, 70))}</a></div>`).join('')}</div>` : '';
+}
+const previews = new Map();
+const getPreview = (u) => cached('p:' + u, async () => { const r = await fetch(`./api/preview?url=${encodeURIComponent(u)}`, { headers: { 'X-Studio': '1' } }); if (!r.ok) throw new Error(r.status); return r.json(); }, 30 * 60 * 1000);
+function linkCard(u, p) {
+  const open = `<a class="att-btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer">↗ Mở link</a>`;
+  if (!p?.ok) return `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="lnk-url">🔗 ${esc(u.replace(/^https?:\/\//, '').slice(0, 70))}</a>${p?.error ? `<small class="hint"> · ${esc(p.error)}</small>` : ''}`;
+  if (p.kind === 'youtube') return `<div class="lnk-yt"><iframe src="${esc(p.embed)}" title="${esc(p.title || 'YouTube')}" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="lnk-body"><small class="lnk-site">▶ YouTube${p.author ? ` · ${esc(p.author)}` : ''}</small><b>${esc(p.title || 'Video YouTube')}</b>${open}</div>`;
+  const site = p.kind === 'drive' ? '📁 Google Drive' : p.kind === 'facebook' ? 'ⓕ Facebook' : esc(p.site || new URL(p.url || u).hostname);
+  const img = p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+  return `${img}<div class="lnk-body"><small class="lnk-site">${site}</small><b>${esc(p.title || u)}</b>${p.description ? `<p>${esc(p.description.slice(0, 200))}</p>` : ''}${p.note ? `<p class="hint">${esc(p.note)}</p>` : ''}${open}</div>`;
 }
 
 export function attachHtml(paths) {
@@ -80,6 +99,14 @@ function dirItems(files) {
 
 // Điền nội dung cho các thẻ file vừa được vẽ (đọc Markdown, liệt kê thư mục)
 export function hydrate(root) {
+  root.querySelectorAll('[data-link]:not([data-ready])').forEach(async (el) => {
+    el.dataset.ready = '1';
+    const u = el.dataset.link;
+    let p; try { p = await getPreview(u); } catch { p = null; }
+    el.classList.add('lnk-card', `lnk-${p?.ok ? p.kind : 'plain'}`);
+    el.innerHTML = linkCard(u, p);
+    el.querySelector('img')?.addEventListener('error', (e) => e.target.remove(), { once: true });
+  });
   // ảnh xem trước 3D không có thì ẩn đi, chỉ để nút "Xem 3D"
   root.querySelectorAll('img.m3d-thumb:not([data-ready])').forEach((im) => { im.dataset.ready = '1'; im.addEventListener('error', () => im.remove(), { once: true }); });
   root.querySelectorAll('[data-doc]:not([data-ready])').forEach(async (el) => {

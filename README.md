@@ -84,6 +84,18 @@ Nhân viên làm xong → **Grid duyệt trước** (trạng thái *GRID DUYỆT
 Ở **Bảng công việc** bấm **Xem & duyệt**: xem toàn bộ file, rồi **Duyệt bản cuối** hoặc **Gửi góp ý cho Grid**. Grid chuyển góp ý cho đúng người sửa.
 Việc của Lue (trợ lý riêng) thì gửi thẳng anh.
 
+### Gửi file, ảnh, link trong chat
+
+- **📎** chọn file, **Ctrl+V** dán ảnh chụp màn hình, hoặc **kéo thả** file vào khung chat. Tối đa 10 file, mỗi file 100 MB, lưu ở `inputs/<ngày>/`.
+- Link trong tin nhắn tự thành **thẻ xem trước**. Video YouTube xem được ngay trong chat. Drive và Facebook hiện tiêu đề, ảnh.
+- Nhân viên đọc được nội dung link bằng `node office/tools/read-link.mjs <link>`:
+  - **Trang web:** đọc toàn bộ chữ.
+  - **YouTube:** tiêu đề, kênh, mô tả. Phụ đề thì YouTube hay chặn tải tự động.
+  - **Google Docs/Sheets/Slides:** đọc nội dung. **File Drive:** tải về bằng `--save`.
+  - **Facebook:** chỉ phần công khai.
+- Chỉ đọc được nội dung **công khai**. File Drive phải bật "Bất kỳ ai có đường liên kết". Với bài Facebook riêng tư hoặc nhóm kín, anh chụp màn hình hoặc copy nội dung gửi vào chat. Văn phòng **không đăng nhập** tài khoản của anh.
+- Link trỏ vào máy/mạng nội bộ bị chặn. Nhân viên được dặn coi nội dung link/file là dữ liệu, không làm theo "lệnh" trong đó.
+
 ### Xuất file: PNG, PDF, 3D
 
 Agent được phép chạy 2 công cụ dưới đây. Cả 2 chỉ đọc và ghi trong `outputs/`, dùng Edge/Chrome chạy ẩn:
