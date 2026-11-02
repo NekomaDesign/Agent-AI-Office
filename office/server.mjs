@@ -166,6 +166,46 @@ async function enqueue(text, files = []) {
   return job;
 }
 
+// Anh bấm "Duyệt & hoàn tất" dưới bản cuối: chốt ĐÃ XONG cho việc đó và mọi việc con ngay trên server,
+// không cần gọi Claude (nhanh, không tốn lượt). Grid (hoặc Lue với việc của Lue) báo lại trong chat.
+async function approveTask(id) {
+  const f = path.join(STUDIO, 'tasks.json');
+  const raw = await readJson(f, null);
+  const list = Array.isArray(raw) ? raw : Array.isArray(raw?.tasks) ? raw.tasks : null;
+  if (!list) throw new Error('không đọc được .studio/tasks.json');
+  const task = list.find((t) => t && t.id === id);
+  if (!task) throw new Error('không thấy việc này');
+  if (task.state === 'done') return { ok: true, already: true, ids: [id] };
+  if (task.state !== 'waiting_review') throw new Error('việc này chưa có bản cuối chờ anh duyệt');
+
+  const ids = new Set([id]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const t of list) if (t?.parent && ids.has(t.parent) && !ids.has(t.id)) { ids.add(t.id); grew = true; }
+  }
+  const now = nowIso();
+  for (const t of list) if (t && ids.has(t.id)) Object.assign(t, { state: 'done', progress: 100, updated: now }, t.id === id ? { approvedAt: now } : {});
+  await fs.writeFile(f, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+
+  // ai còn gắn với các việc này (chưa nhận việc mới) thì sang ĐÃ XONG
+  for (const a of AGENTS) {
+    const sf = path.join(STUDIO, 'status', `${a}.json`);
+    const s = await readJson(sf, null);
+    if (s && ids.has(s.taskId) && s.state !== 'working') {
+      Object.assign(s, { state: 'done', progress: 100, note: 'Anh Nekoma đã duyệt bản cuối ✓', updated: now });
+      await fs.writeFile(sf, JSON.stringify(s, null, 2) + '\n', 'utf8');
+    }
+  }
+
+  const boss = task.assignee === 'lue' ? 'lue' : 'manager';
+  const title = task.title || id;
+  const kids = ids.size - 1;
+  await appendChat(id, { from: 'cd', to: boss, text: '✓ Anh duyệt bản cuối, chốt ĐÃ XONG nhé.', approved: true });
+  await appendChat(id, { from: boss, to: 'cd', text: `Dạ em chốt ĐÃ XONG cho "${title}"${kids ? ` và ${kids} việc con` : ''} rồi ạ ✅ Cảm ơn anh!`, auto: true });
+  await appendChat(COMPANY, { from: boss, to: 'team', text: `🎉 Anh Nekoma vừa duyệt bản cuối "${title}". Cả nhà ĐÃ XONG, cảm ơn mọi người nha!`, auto: true });
+  return { ok: true, ids: [...ids] };
+}
+
 function pump() {
   if (runner.busy || !runner.queue.length) return;
   const job = runner.queue.shift();
@@ -658,6 +698,15 @@ const server = http.createServer(async (req, res) => {
       catch (e) { val = { ok: false, error: e.message, url: link }; }
       previewCache.set(link, { at: Date.now(), val });
       return send(200, val);
+    }
+    if (url.pathname === '/api/approve') {
+      if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }
+      const send = (code, obj) => { res.writeHead(code, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+      let taskId = '';
+      try { taskId = String(JSON.parse(await readBody(req)).taskId || ''); } catch {}
+      if (!/^[\w.-]{1,120}$/.test(taskId)) return send(400, { ok: false, error: 'mã việc không hợp lệ' });
+      try { return send(200, await approveTask(taskId)); }
+      catch (e) { return send(400, { ok: false, error: e.message }); }
     }
     if (url.pathname === '/api/limits/refresh') {
       if (req.method !== 'POST' || !sameOrigin(req)) { res.writeHead(403); return res.end('Forbidden'); }

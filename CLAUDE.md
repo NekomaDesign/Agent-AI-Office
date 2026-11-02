@@ -42,7 +42,10 @@ Khu E · Quảng trường chat là kênh chat chung của cả công ty.
    giao lại đúng người. Đạt → việc con sang `done` (Grid duyệt).
 3. Grid gửi anh **bản cuối**: task cha (hoặc việc anh giao thẳng một bạn) → `waiting_review`, Grid nhắn
    anh trong chat của task kèm `"files"` các file chính và `outputs/<taskId>/summary.md`.
-4. Anh duyệt bản cuối → task cha + mọi task con → `done`.
+4. Anh duyệt bản cuối → task cha + mọi task con → `done`. Thường anh bấm nút **✓ Duyệt & hoàn tất**
+   ngay dưới tin bản cuối: server tự chuyển task + task con + status sang `done` và ghi tin
+   `"approved": true` vào chat. Thấy tin đó thì việc đã chốt xong: KHÔNG làm lại, KHÔNG sửa tasks.json.
+   Vì vậy tin gửi bản cuối phải nằm trong chat của chính task đó (`.studio/chat/<taskId>.jsonl`, `"to":"cd"`).
 5. Anh **góp ý** → luôn gửi cho Grid. Grid chuyển góp ý cho đúng người (ghi vào chat của task con),
    bạn đó sửa → lại `manager_review` → Grid duyệt → gửi anh bản cuối mới.
 6. Ngoại lệ: việc của **Lue** (trợ lý riêng) và việc Grid tự làm thì gửi thẳng anh (`waiting_review`).

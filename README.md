@@ -81,7 +81,12 @@ Tab **Chat công ty** giống Slack: kênh `# all` cho cả công ty, kênh **�
 ### Duyệt việc qua Grid
 
 Nhân viên làm xong → **Grid duyệt trước** (trạng thái *GRID DUYỆT*). Đạt rồi Grid mới gửi anh **bản cuối** (*CHỜ ANH DUYỆT*).
-Ở **Bảng công việc** bấm **Xem & duyệt**: xem toàn bộ file, rồi **Duyệt bản cuối** hoặc **Gửi góp ý cho Grid**. Grid chuyển góp ý cho đúng người sửa.
+Mỗi lần Grid (hoặc Lue) gửi bản cuối, ngay dưới tin nhắn đó có nút **✓ Duyệt & hoàn tất**. Bấm một lần là cả dự án (việc cha + mọi việc con) chuyển **ĐÃ XONG** ngay:
+
+- Nút có trong Chat công ty, ô chat nhỏ ở văn phòng (tin bản cuối được ghim lên đầu), Bảng công việc và cửa sổ **Xem & duyệt**.
+- Duyệt chạy thẳng trên máy, không gọi Claude nên không tốn lượt. Grid báo lại trong kênh việc và # all.
+- Muốn sửa thì bấm **Xem file & góp ý**. Góp ý gửi Grid, Grid chuyển cho đúng người sửa.
+
 Việc của Lue (trợ lý riêng) thì gửi thẳng anh.
 
 ### Gửi file, ảnh, link trong chat

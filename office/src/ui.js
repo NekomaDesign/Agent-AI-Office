@@ -73,7 +73,7 @@ function usageVerdict(u) {
   return { level: 'warn', text: `Dùng hơi nhanh. Với nhịp này có thể chạm hạn mức tuần lúc ${whenText(hitAt)}, trước giờ reset ${whenText(end)}.` };
 }
 
-export function createUI({ world, send, order, newSession, openFolder, setChatter, upload, refreshUsage, theme }) {
+export function createUI({ world, send, order, newSession, openFolder, setChatter, upload, refreshUsage, approve, theme }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -132,9 +132,47 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
       catch (err) { miniToast(`Chưa mở được thư mục: ${err.message}`, true); }
       return;
     }
+    const ap = e.target.closest('[data-approve]');
+    if (ap) { e.preventDefault(); approveFinal(ap.dataset.approve, ap); return; }
     const r = e.target.closest('[data-review]');
     if (r) { e.preventDefault(); openTaskReview(r.dataset.review); }
   });
+
+  // ---- Duyệt & hoàn tất: 1 bấm là chốt ĐÃ XONG cho bản cuối + mọi việc con ----
+  const descendants = (id) => {
+    const out = new Set([id]);
+    for (let grew = true; grew;) { grew = false; for (const t of data.tasks) if (t.parent && out.has(t.parent) && !out.has(t.id)) { out.add(t.id); grew = true; } }
+    out.delete(id);
+    return out.size;
+  };
+  async function approveFinal(id, btn) {
+    const t = data?.tasks.find((x) => x.id === id);
+    if (!t || t.state !== 'waiting_review') return;
+    document.querySelectorAll(`[data-approve="${CSS.escape(id)}"]`).forEach((b) => { b.disabled = true; b.textContent = 'Đang chốt…'; });
+    try {
+      await approve(id);
+      miniToast(`✓ Đã duyệt "${t.title || id}" · ĐÃ XONG${descendants(id) ? ` cả ${descendants(id) + 1} việc` : ''}`);
+    } catch (err) {
+      miniToast(`Chưa duyệt được: ${err.message}`, true);
+      document.querySelectorAll(`[data-approve="${CSS.escape(id)}"]`).forEach((b) => { b.disabled = false; b.textContent = '✓ Duyệt & hoàn tất'; });
+    }
+    render();
+  }
+  // tin bản cuối: tin mới nhất gửi anh trong kênh của việc đang CHỜ ANH DUYỆT → gắn nút duyệt vào đó
+  function finalMessages() {
+    const out = new Map();
+    for (const t of data?.tasks || []) {
+      if (t.state !== 'waiting_review') continue;
+      const m = (data.chats[t.id] || []).findLast((x) => x.from !== 'cd' && x.to === 'cd');
+      if (m) out.set(`${t.id}|${m.time}|${m.from}`, t);
+    }
+    return out;
+  }
+  const approveBar = (t, mini) => mini
+    ? `<div class="final-act mini"><button type="button" class="btn-approve" data-approve="${esc(t.id)}">✓ Duyệt & hoàn tất</button><button type="button" class="btn-mini" data-review="${esc(t.id)}">Xem</button></div>`
+    : `<div class="final-act"><button type="button" class="btn-approve" data-approve="${esc(t.id)}">✓ Duyệt & hoàn tất</button>
+        <button type="button" class="btn-mini" data-review="${esc(t.id)}">Xem file & góp ý</button>
+        <small>Bấm duyệt là chốt <b>ĐÃ XONG</b> cho cả dự án${descendants(t.id) ? ` (${descendants(t.id) + 1} việc)` : ''}. Muốn sửa thì bấm góp ý.</small></div>`;
   function miniToast(text, err) {
     const el = document.createElement('div');
     el.className = 'toast';
@@ -167,22 +205,18 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
       ${note}
       ${attachHtml(files)}
       ${final ? `<div class="review-act">
-        <button type="button" class="btn btn-dark" id="rv-ok" ${can ? '' : 'disabled'}>✓ Duyệt bản cuối</button>
+        <button type="button" class="btn btn-dark" id="rv-ok" ${mode === 'live' || mode === 'demo' ? '' : 'disabled'}>✓ Duyệt & hoàn tất${kids.length ? ` · chốt ĐÃ XONG cả ${descendants(t.id) + 1} việc` : ''}</button>
         <textarea id="rv-text" rows="3" placeholder="Góp ý cho bản cuối… ${boss === 'Grid' ? 'Grid sẽ chuyển cho đúng bạn sửa rồi gửi lại anh' : 'Lue sẽ sửa rồi gửi lại anh'}"></textarea>
         <button type="button" class="btn" id="rv-fb" ${can ? '' : 'disabled'}>Gửi góp ý cho ${boss}</button>
-        <small class="hint" id="rv-hint">${can ? (boss === 'Grid' ? 'Duyệt hay góp ý đều gửi cho Grid — Grid chốt với cả team.' : 'Việc của Lue — duyệt hay góp ý gửi thẳng Lue.') : esc(runnerStatus().text || 'Chưa gửi được lúc này')}</small>
+        <small class="hint" id="rv-hint">Duyệt là chốt ĐÃ XONG ngay, không tốn lượt Claude. ${can ? (boss === 'Grid' ? 'Góp ý thì gửi Grid, Grid chuyển cho đúng bạn sửa.' : 'Góp ý thì gửi thẳng Lue.') : esc(runnerStatus().text || 'Góp ý chưa gửi được lúc này')}</small>
       </div>` : ''}
     </div>`, true);
     if (!final) return;
     const done = (msg) => { body.querySelector('.review-act').innerHTML = `<p class="review-note ok">${esc(msg)}</p>`; };
-    body.querySelector('#rv-ok').addEventListener('click', async () => {
-      try {
-        await order(boss === 'Grid'
-          ? `Grid ơi, anh duyệt bản cuối "${t.title || t.id}" (task ${t.id}) rồi nhé. Em chốt done cho task và các việc con, cảm ơn team giúp anh.`
-          : `Lue ơi, anh duyệt "${t.title || t.id}" (task ${t.id}) rồi nhé, em chuyển sang done giúp anh.`);
-        done(`Đã gửi duyệt cho ${boss} ✓`);
-      }
-      catch (err) { body.querySelector('#rv-hint').textContent = `Chưa gửi được: ${err.message}`; }
+    body.querySelector('#rv-ok').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try { await approve(t.id); done(`✓ Đã duyệt · "${t.title || t.id}" ĐÃ XONG`); render(); }
+      catch (err) { e.currentTarget.disabled = false; body.querySelector('#rv-hint').textContent = `Chưa duyệt được: ${err.message}`; }
     });
     body.querySelector('#rv-fb').addEventListener('click', async () => {
       const fb = body.querySelector('#rv-text').value.trim();
@@ -470,10 +504,18 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
   function renderMini() {
     const msgs = allMessages(data.chats);
     $('#mini-count').textContent = msgs.length;
-    const last = msgs.slice(-3).reverse();
+    // bản cuối chờ anh duyệt luôn nằm trên cùng, kèm nút duyệt, để không bị tin tám chuyện đẩy trôi
+    const finals = finalMessages();
+    const keyOf = (m) => `${m.taskId}|${m.time}|${m.from}`;
+    const pinned = msgs.filter((m) => finals.has(keyOf(m))).reverse();
+    const last = [...pinned, ...msgs.filter((m) => !finals.has(keyOf(m))).slice(-Math.max(1, 3 - pinned.length)).reverse()];
+    const signature = last.map(keyOf).join(',') + '|' + last.map((m) => timeAgo(m.time)).join(',');
+    if ($('#mini-list').dataset.sig === signature) return; // giữ nguyên để nút đang bấm dở không bị vẽ lại
+    $('#mini-list').dataset.sig = signature;
     $('#mini-list').innerHTML = last.length ? last.map((m) => {
       const p = PEOPLE[m.from] || { color: '#888' };
-      return `<li>${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${m.taskId === COMPANY ? ' · <i># all</i>' : m.taskId === CHATTER ? ' · <i>☕ tám</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p>${filesOf(m).length ? `<small class="mini-files">📎 ${filesOf(m).length} tệp — mở Chat công ty để xem</small>` : ''}</div></li>`;
+      const fin = finals.get(keyOf(m));
+      return `<li class="${fin ? 'final' : ''}">${avatar(m.from)}<div><div class="who" style="--c:${p.color}"><b>${esc(nameOf(m.from))}</b> → ${esc(nameOf(m.to))}${fin ? ' · <i class="final-tag">BẢN CUỐI</i>' : m.taskId === COMPANY ? ' · <i># all</i>' : m.taskId === CHATTER ? ' · <i>☕ tám</i>' : ''} · <time>${timeAgo(m.time)}</time></div><p>${richText(m.text)}</p>${filesOf(m).length ? `<small class="mini-files">📎 ${filesOf(m).length} tệp — mở Chat công ty để xem</small>` : ''}${fin ? approveBar(fin, true) : ''}</div></li>`;
     }).join('') : '<li class="mini-empty">Chưa có tin nhắn nào.</li>';
   }
 
@@ -498,7 +540,7 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
         <td><button class="person" data-id="${esc(t.assignee)}" style="--c:${p.color}"><i></i>${esc(p.name)}</button></td><td>${by}</td><td>${pill(t.state)}</td>
         <td><div class="bar" style="--c:${st.color}"><span><b style="width:${t.progress}%"></b></span>${t.progress}%</div></td>
         <td>${esc(t.deadline || '—')}</td><td>${timeAgo(t.updated)}</td>
-        <td>${t.state === 'waiting_review' && !t.parent ? `<button class="btn-mini hot" data-review="${esc(t.id)}">Xem & duyệt</button>` : `<button class="btn-mini" data-review="${esc(t.id)}">📎 Xem</button>`}</td></tr>`; }).join('')}
+        <td>${t.state === 'waiting_review' ? `<span class="act-row"><button class="btn-mini hot" data-approve="${esc(t.id)}" title="Chốt ĐÃ XONG cho việc này${t._child ? '' : ' và mọi việc con'}">✓ Duyệt</button><button class="btn-mini" data-review="${esc(t.id)}">Xem</button></span>` : `<button class="btn-mini" data-review="${esc(t.id)}">📎 Xem</button>`}</td></tr>`; }).join('')}
       </tbody></table></div>`
       : `<div class="empty"><b>Chưa có việc nào</b>Mở Claude Code và giao việc, ví dụ: <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code></div>`;
     $('#view-board').innerHTML = head + body;
@@ -663,7 +705,9 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
         : `<b># ${esc(tt.title)}</b><small>${channel === COMPANY ? 'Cả công ty · tag @tên để người đó trả lời, @all để cả team (Grid thay mặt) trả lời · không tag thì chỉ ghi lại' : esc(tt.project)}</small>`;
 
     let lastDay = '', lastFrom = '';
+    const finals = finalMessages();
     const html = list.length ? list.map((m) => {
+      const fin = finals.get(`${m.taskId}|${m.time}|${m.from}`);
       const d = new Date(m.time); const day = isNaN(d) ? '' : d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' });
       const sep = day && day !== lastDay ? `<div class="day-sep"><span>${esc(day)}</span></div>` : '';
       if (sep) lastFrom = '';
@@ -674,7 +718,7 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
       const toMe = m.to === 'cd' ? ' to-me' : '';
       return sep + `<div class="smsg ${cont ? 'cont' : ''}${toMe}">${cont ? '<span class="avatar-gap"></span>' : avatar(m.from)}<div class="smsg-body">
         ${cont ? '' : `<div class="smeta"><b style="--c:${p.color}">${esc(nameOf(m.from))}</b><span class="role">${esc(p.role || '')}</span><time>${hhmm(m.time)}</time>${m.to && m.to !== 'team' ? `<span class="to">→ ${esc(nameOf(m.to))}</span>` : ''}${where}</div>`}
-        ${m.text ? `<div class="stext">${richText(m.text)}</div>` : ''}${attachHtml(filesOf(m))}${linkHtml(linksOf(m))}</div></div>`;
+        ${m.text ? `<div class="stext">${richText(m.text)}</div>` : ''}${attachHtml(filesOf(m))}${linkHtml(linksOf(m))}${fin ? approveBar(fin) : ''}</div></div>`;
     }).join('') : channel === ORDERS
       ? `<div class="empty"><b>Chưa có lệnh nào</b>Gõ ví dụ <code>Grid ơi, lo trọn gói chiến dịch này giúp anh</code> — Claude sẽ chuyển việc cho đúng người.</div>`
       : `<div class="empty"><b>Kênh còn trống</b>Gõ tin đầu tiên bên dưới. Muốn agent làm việc thật thì dùng kênh <b>⚡ Giao việc</b>.</div>`;
