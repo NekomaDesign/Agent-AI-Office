@@ -44,11 +44,36 @@ function allMessages(chats) {
 const elapsed = (iso) => { const s = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 const CHATTER = 'tam-chuyen'; // kênh giả lập: nhân viên tám chuyện theo office/chatter.json
-const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n || 0));
-const fmtUsd = (n) => '$' + (n || 0).toFixed(2);
-const fmtMin = (ms) => (ms >= 60000 ? `${Math.round(ms / 60000)} phút` : `${Math.round((ms || 0) / 1000)} giây`);
+// ---- lượt dùng gói Claude: chữ cho mốc reset & nhịp dùng trong tuần ----
+const WEEKDAY = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+function whenText(d) {
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 864e5);
+  const at = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return diff === 0 ? `${at} hôm nay` : diff === 1 ? `${at} ngày mai` : `${at} ${WEEKDAY[d.getDay()]}`;
+}
+function leftText(d) {
+  const m = Math.max(1, Math.round((d - Date.now()) / 60000));
+  return m < 60 ? `${m} phút` : `${Math.floor(m / 60)} giờ${m % 60 ? ` ${m % 60} phút` : ''}`;
+}
+const WEEK_MS = 7 * 864e5;
+// nhận xét như trang usage của Claude: với nhịp hiện tại, tới giờ reset tuần còn dư không
+function usageVerdict(u) {
+  const s = u.session, w = u.week;
+  if (u.status === 'rejected') {
+    const hit = [s, w].filter((x) => x?.status === 'rejected' && x.resetsAt).map((x) => new Date(x.resetsAt)).sort((a, b) => b - a)[0];
+    return { level: 'limit', text: `Đã hết lượt dùng.${hit ? ` Dùng lại được lúc ${whenText(hit)}.` : ''} Lệnh gửi lúc này sẽ báo lỗi.` };
+  }
+  if (s?.used >= 90) return { level: 'warn', text: `Phiên hiện tại sắp đầy (${s.used}%). Reset lúc ${whenText(new Date(s.resetsAt))}.` };
+  if (!w?.resetsAt) return { level: 'ok', text: 'Tuần này chưa dùng gì. Thoải mái giao việc nhé.' };
+  const end = new Date(w.resetsAt), passed = Math.max(0, WEEK_MS - (end - Date.now())) / WEEK_MS;
+  if (passed < 0.05 || w.used <= passed * 100 * 0.9) return { level: 'ok', text: `Ổn định. Với nhịp này anh tới giờ reset ${whenText(end)} mà vẫn còn dư.` };
+  if (w.used / passed <= 100) return { level: 'ok', text: `Đúng nhịp. Tới giờ reset ${whenText(end)} anh dùng vừa đủ hạn mức tuần.` };
+  const hitAt = new Date(Date.now() + ((100 - w.used) / (w.used / (passed * WEEK_MS))));
+  return { level: 'warn', text: `Dùng hơi nhanh. Với nhịp này có thể chạm hạn mức tuần lúc ${whenText(hitAt)}, trước giờ reset ${whenText(end)}.` };
+}
 
-export function createUI({ world, send, order, newSession, openFolder, setChatter, upload }) {
+export function createUI({ world, send, order, newSession, openFolder, setChatter, upload, refreshUsage, theme }) {
   let data = null;
   let mode = 'connecting';
   let selected = 'cd';
@@ -233,31 +258,67 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
   }
 
   // ---- data ----
-  // ---- usage Claude: ô trên thanh trên + bảng chi tiết ----
-  $('#usage-chip').addEventListener('click', () => openUsage());
+  // ---- lượt dùng gói Claude: ô trên thanh trên + bảng thả xuống (phiên 5 giờ · tuần này) ----
+  const usageChip = $('#usage-chip'), usagePop = $('#usage-pop');
+  let usageBusy = false, usageErr = '';
+  usageChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    usagePop.hidden = !usagePop.hidden;
+    usageChip.setAttribute('aria-expanded', String(!usagePop.hidden));
+    renderUsage();
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!usagePop.hidden && !usagePop.contains(e.target) && !usageChip.contains(e.target)) { usagePop.hidden = true; usageChip.setAttribute('aria-expanded', 'false'); }
+  });
+  usagePop.addEventListener('click', async (e) => {
+    if (!e.target.closest('#up-refresh') || usageBusy) return;
+    usageBusy = true; usageErr = ''; renderUsage();
+    try { await refreshUsage(); } catch (err) { usageErr = err.message; }
+    usageBusy = false; renderUsage();
+  });
+  const levelOf = (w, u) => (w?.status === 'rejected' || (u.status === 'rejected' && w?.used >= 100) ? 'limit' : w?.used >= 80 ? 'warn' : '');
   function renderUsage() {
-    const chip = $('#usage-chip');
     const u = data?.usage;
-    chip.hidden = !u;
-    if (!u) return;
-    chip.dataset.state = u.limit ? 'limit' : data.runner?.busy ? 'busy' : '';
-    chip.textContent = u.limit
-      ? `⛔ CLAUDE HẾT LƯỢT${u.limit.reset ? ` · RESET ${u.limit.reset.toUpperCase()}` : ''}`
-      : `✦ CLAUDE · ${u.today.runs} LƯỢT · ${fmtTok(u.today.tokens)} TOKEN`;
+    usageChip.hidden = !u;
+    if (!u) { usagePop.hidden = true; return; }
+    const s = u.session || { used: 0 }, w = u.week || { used: 0 };
+    const known = !!u.updated;
+    const v = known ? usageVerdict(u) : null;
+    usageChip.dataset.state = u.status === 'rejected' ? 'limit' : v?.level === 'warn' ? 'warn' : '';
+    usageChip.innerHTML = u.status === 'rejected'
+      ? '⛔ HẾT LƯỢT CLAUDE'
+      : known
+        ? `✦ <span class="cu">PHIÊN <i><b style="width:${s.used}%"></b></i> ${s.used}%</span><span class="cu">TUẦN <i><b style="width:${w.used}%"></b></i> ${w.used}%</span>`
+        : '✦ LƯỢT DÙNG';
+    if (usagePop.hidden) return;
+
+    const active = !!u.session?.resetsAt;
+    const row = (name, win, sub) => `<div class="up-row" data-level="${levelOf(win, u)}">
+      <div><b>${name}</b><small>${sub}</small></div>
+      <div class="up-bar"><i style="width:${Math.min(100, win?.used || 0)}%"></i></div>
+      <span class="up-pct">${win?.used || 0}% đã dùng</span></div>`;
+    usagePop.innerHTML = `
+      <div class="up-head"><b>Lượt dùng của anh</b>${u.plan ? `<span class="up-plan">${esc(u.plan)}</span>` : ''}
+        <button type="button" class="up-refresh" id="up-refresh" ${usageBusy || u.checking || mode !== 'live' ? 'disabled' : ''}
+          title="${active ? 'Kiểm tra lại bằng Haiku (khoảng 0,001$)' : 'Chưa trong phiên 5 giờ: kiểm tra sẽ bắt đầu phiên mới'}">${usageBusy || u.checking ? 'Đang kiểm tra…' : '↻ Cập nhật'}</button></div>
+      ${known ? `<p class="up-status ${v.level}">${esc(v.text)}</p>
+        ${row('Phiên hiện tại', u.session, active ? `Reset sau ${leftText(new Date(u.session.resetsAt))}` : 'Bắt đầu khi anh gửi tin đầu tiên')}
+        ${row('Tuần này', u.week, u.week?.resetsAt ? `Reset lúc ${whenText(new Date(u.week.resetsAt))}` : 'Bắt đầu khi anh gửi tin đầu tiên')}`
+        : '<p class="up-status">Chưa có số liệu. Bấm ↻ Cập nhật, hoặc giao 1 việc là có ngay.</p>'}
+      ${u.note ? `<p class="review-note err">${esc(u.note)}</p>` : ''}
+      ${usageErr ? `<p class="review-note err">Chưa kiểm tra được: ${esc(usageErr)}</p>` : ''}
+      <p class="up-foot">${known ? `Cập nhật ${timeAgo(u.updated)} · ` : ''}Số liệu Claude gửi về mỗi lần văn phòng chạy việc. Đang trong phiên thì tự cập nhật 10 phút một lần.${active ? '' : ' Ngoài phiên, bấm ↻ sẽ bắt đầu phiên 5 giờ mới.'}</p>`;
   }
-  function openUsage() {
-    const u = data?.usage; if (!u) return;
-    const card = (title, s) => `<div class="us-card"><small>${title}</small><b>${s.runs} lượt</b><span>${s.ok}/${s.runs} thành công</span><span>${fmtTok(s.tokens)} token · ${fmtTok(s.output)} viết ra</span><span>${fmtUsd(s.cost)} quy đổi API · ${fmtMin(s.ms)}</span></div>`;
-    const kind = { order: '⚡ Giao việc', chat: '# all', review: 'Duyệt' };
-    openModal(`<div class="usage">
-      <h3>Claude của anh · lượt dùng từ văn phòng</h3>
-      ${u.limit ? `<p class="review-note err">⛔ Gói Claude đang hết lượt${u.limit.reset ? ` — reset lúc <b>${esc(u.limit.reset)}</b>` : ''}. Lệnh gửi lúc này sẽ báo lỗi, tới giờ reset anh gửi lại nhé.<br><small>${esc(u.limit.text || '')}</small></p>` : ''}
-      <div class="us-grid">${card('HÔM NAY', u.today)}${card('5 GIỜ QUA', u.last5h)}${card('7 NGÀY', u.last7d)}${card('TỪ TRƯỚC TỚI NAY', u.total)}</div>
-      <h4>LẦN CHẠY GẦN ĐÂY</h4>
-      ${u.recent.length ? `<div class="table-wrap"><table><thead><tr><th>LÚC</th><th>LOẠI</th><th>LỆNH</th><th>TOKEN</th><th>QUY ĐỔI</th><th>THỜI GIAN</th><th>KẾT QUẢ</th></tr></thead><tbody>${u.recent.map((r) => `<tr><td>${hhmm(r.time)} <small class="hint">${esc(r.time.slice(5, 10))}</small></td><td>${kind[r.kind] || esc(r.kind)}</td><td>${esc(r.text)}</td><td>${fmtTok(r.input + r.output + r.cacheRead + r.cacheWrite)}</td><td>${fmtUsd(r.cost)}</td><td>${fmtMin(r.durationMs)}</td><td>${r.ok ? '<span class="pill" data-s="done" style="--c:#2f9a5c">XONG</span>' : `<span class="pill" style="--c:#d93a2b">${r.limited ? 'HẾT LƯỢT' : 'LỖI'}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Chưa có lần chạy nào được ghi lại.</p>'}
-      <p class="hint">Chỉ tính các lần văn phòng gọi Claude chạy nền (kênh ⚡ Giao việc, tag ở # all, nút duyệt/góp ý). "Quy đổi API" là giá nếu trả theo API — gói Pro không bị tính số tiền này. Anthropic chưa cho đọc % hạn mức 5 giờ của gói Pro tự động; muốn xem chính xác, mở Claude Code và gõ <code>/usage</code>.</p>
-    </div>`, true);
+
+  // ---- giao diện sáng / tối ----
+  const themeChip = $('#theme-chip');
+  function renderTheme() {
+    if (!theme) { themeChip.hidden = true; return; }
+    const night = theme.theme === 'dark';
+    themeChip.textContent = theme.mode === 'auto' ? `◐ TỰ ĐỘNG · ${night ? 'TỐI' : 'SÁNG'}` : night ? '☾ TỐI' : '☀ SÁNG';
   }
+  themeChip.addEventListener('click', () => { theme?.cycle(); renderTheme(); });
+  renderTheme();
 
   function update(d) {
     data = d;
@@ -679,5 +740,5 @@ export function createUI({ world, send, order, newSession, openFolder, setChatte
   // làm mới "x phút trước"
   setInterval(() => { if (data) renderMini(); }, 15000);
 
-  return { update, setMode, select, setView, openProfile };
+  return { update, setMode, select, setView, openProfile, renderTheme };
 }

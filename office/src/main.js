@@ -1,6 +1,7 @@
 import { createWorld } from './world.js';
 import { createUI } from './ui.js';
 import { startSource } from './data.js';
+import { startTheme } from './theme.js';
 
 async function boot() {
   // Chờ font tải xong để chữ vẽ trên tường/màn hình 3D hiển thị đúng tiếng Việt
@@ -20,7 +21,12 @@ async function boot() {
     onSelect: (id) => ui.select(id),
     onOpenChat: () => ui.setView('chat'),
   });
+  // sáng / tối theo giờ thật — ánh sáng văn phòng 3D đổi theo
+  let firstTheme = true;
+  const theme = startTheme((t) => { world.setTheme(t, firstTheme); firstTheme = false; ui?.renderTheme(); });
   ui = createUI({
+    theme,
+    refreshUsage: () => source.refreshUsage(),
     world,
     send: (channel, text, files) => source.send(channel, text, files),
     order: (text, files) => source.order(text, files),

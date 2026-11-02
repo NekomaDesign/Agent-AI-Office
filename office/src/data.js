@@ -125,7 +125,13 @@ export function startSource(onData, onMode) {
     return post('./api/chatter', { enabled: on });
   }
 
-  return { send, order, newSession, openFolder, setChatter, upload };
+  // kiểm tra lại % lượt dùng gói Claude (server gọi Haiku 1 câu ngắn)
+  async function refreshUsage() {
+    if (mode !== 'live') throw new Error('chỉ kiểm tra được khi chạy start-studio.bat trên máy');
+    return post('./api/limits/refresh', {});
+  }
+
+  return { send, order, newSession, openFolder, setChatter, upload, refreshUsage };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------
@@ -262,8 +268,20 @@ function createDemo() {
         chats,
         reports: T >= 52 ? [report] : [],
         chatter: chatterOn,
+        usage: demoUsage(),
       };
     },
+  };
+}
+
+// bản demo: số liệu mẫu cho ô lượt dùng (phiên 5 giờ đang chạy, tuần reset 10:00 sáng mai)
+function demoUsage() {
+  const now = new Date();
+  const week = new Date(now); week.setDate(now.getDate() + 1); week.setHours(10, 0, 0, 0);
+  return {
+    plan: 'Pro', status: 'allowed', note: '', checking: false, updated: toLocalIso(new Date(now - 120000)),
+    session: { used: 12, resetsAt: new Date(now.getTime() + 3.2 * 3600e3).toISOString(), status: 'allowed' },
+    week: { used: 47, resetsAt: week.toISOString(), status: 'allowed' },
   };
 }
 
