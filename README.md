@@ -114,9 +114,28 @@ Máy chưa cài Blender. Script Blender (`.py`) Cube viết là để anh tự c
 
 ### Lượt dùng Claude
 
-Ô **✦ CLAUDE** trên thanh trên cùng cho biết số lượt và token văn phòng đã dùng hôm nay. Khi gói Claude hết lượt, ô chuyển đỏ kèm giờ reset.
-Bấm vào ô để xem chi tiết: hôm nay, 5 giờ qua, 7 ngày, các lần chạy gần đây. Số liệu ghi ở `.studio/usage.jsonl`.
-Ô này chỉ tính các lần văn phòng gọi Claude chạy nền. % hạn mức chính xác của gói Pro thì xem bằng lệnh `/usage` trong Claude Code.
+Ô **✦ PHIÊN · TUẦN** trên thanh trên cùng cho biết đã dùng bao nhiêu % hạn mức gói Claude. Đây cũng là số trong `/usage` của Claude Code.
+Bấm vào ô để mở bảng chi tiết:
+
+- **Phiên hiện tại** (5 giờ): % đã dùng, còn bao lâu thì reset.
+- **Tuần này**: % đã dùng, giờ reset.
+- Một câu nhận xét nhịp dùng, ví dụ *"Ổn định. Với nhịp này anh tới giờ reset 10:00 hôm nay mà vẫn còn dư."*
+
+Hết lượt thì ô chuyển đỏ, kèm giờ dùng lại được.
+
+- Số liệu Claude gửi về mỗi lần văn phòng chạy việc, lưu ở `.studio/limits.json`.
+- Trong phiên 5 giờ: tự cập nhật 10 phút một lần, khi anh đang mở văn phòng. Mỗi lần kiểm tra bằng Haiku tốn khoảng 0,001$.
+- Nút **↻ Cập nhật** kiểm tra ngay. Ngoài phiên, bấm nút này sẽ bắt đầu phiên 5 giờ mới, nên văn phòng không tự kiểm tra lúc đó.
+
+### Giao diện sáng / tối
+
+Nút **◐** trên thanh trên cùng đổi giữa 3 chế độ:
+
+- **Tự động** (mặc định): theo giờ thật trên máy. Sáng từ 6:00 đến 18:00, tối từ 18:00, tự chuyển đúng giờ không cần tải lại.
+- **Sáng**
+- **Tối**
+
+Văn phòng 3D đổi ánh sáng theo: ban đêm có trăng xanh dịu, đèn trong phòng ấm, màn hình và đèn bàn nổi bật hơn.
 
 ### ☕ Tám chuyện (giả lập)
 

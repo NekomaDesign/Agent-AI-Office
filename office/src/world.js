@@ -134,7 +134,8 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
   controls.update();
 
   // Ánh sáng
-  scene.add(new THREE.HemisphereLight('#fff8ee', '#d8c9b4', 1.15));
+  const hemi = new THREE.HemisphereLight('#fff8ee', '#d8c9b4', 1.15);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight('#fff0db', 2.4);
   sun.position.set(-9, 26, 16);
   sun.target.position.set(0, 0, 0);
@@ -147,6 +148,40 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
   const fill = new THREE.DirectionalLight('#ffe2c4', 0.5);
   fill.position.set(20, 10, 4);
   scene.add(fill);
+
+  // Ngày / đêm theo theme: ban đêm trăng xanh dịu + đèn trong phòng ấm, đèn bàn và màn hình nổi bật hơn
+  const LIGHTING = {
+    light: { sky: '#fff8ee', ground: '#d8c9b4', hemi: 1.15, sun: '#fff0db', sunI: 2.4, fill: '#ffe2c4', fillI: 0.5, env: 0.45, exposure: 1.05 },
+    dark: { sky: '#7f90c8', ground: '#2a2536', hemi: 0.62, sun: '#a9bcff', sunI: 0.9, fill: '#ffae66', fillI: 0.85, env: 0.2, exposure: 1.0 },
+  };
+  const lightFrom = {}, lightTo = {};
+  let lightT = 1;
+  const snapLight = () => ({
+    sky: hemi.color.clone(), ground: hemi.groundColor.clone(), hemi: hemi.intensity, sun: sun.color.clone(), sunI: sun.intensity,
+    fill: fill.color.clone(), fillI: fill.intensity, env: scene.environmentIntensity, exposure: renderer.toneMappingExposure,
+  });
+  function tickLight(dt) {
+    if (lightT >= 1) return;
+    lightT = Math.min(1, lightT + dt / 1.6);
+    const k = lightT * lightT * (3 - 2 * lightT);
+    const L = THREE.MathUtils.lerp;
+    hemi.color.lerpColors(lightFrom.sky, lightTo.sky, k);
+    hemi.groundColor.lerpColors(lightFrom.ground, lightTo.ground, k);
+    sun.color.lerpColors(lightFrom.sun, lightTo.sun, k);
+    fill.color.lerpColors(lightFrom.fill, lightTo.fill, k);
+    hemi.intensity = L(lightFrom.hemi, lightTo.hemi, k);
+    sun.intensity = L(lightFrom.sunI, lightTo.sunI, k);
+    fill.intensity = L(lightFrom.fillI, lightTo.fillI, k);
+    scene.environmentIntensity = L(lightFrom.env, lightTo.env, k);
+    renderer.toneMappingExposure = L(lightFrom.exposure, lightTo.exposure, k);
+  }
+  function setTheme(theme, instant) {
+    const p = LIGHTING[theme] || LIGHTING.light;
+    Object.assign(lightFrom, snapLight());
+    Object.assign(lightTo, { ...p, sky: new THREE.Color(p.sky), ground: new THREE.Color(p.ground), sun: new THREE.Color(p.sun), fill: new THREE.Color(p.fill) });
+    lightT = 0;
+    if (instant) tickLight(10);
+  }
 
   const world = new THREE.Group();
   scene.add(world);
@@ -385,6 +420,7 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
       else stations[id].say(text);
     },
     setPaused(p) { paused = p; labels.domElement.style.visibility = p ? 'hidden' : 'visible'; },
+    setTheme,
   };
 
   // ---------- resize + loop ----------
@@ -420,6 +456,7 @@ export function createWorld(container, { onSelect, onOpenChat, onZone }) {
     }
     controls.update();
     if (paused) return;
+    tickLight(dt);
     for (const f of tickers) f(t, dt);
     tickWalkers(dt);
     for (const s of Object.values(stations)) s.tick(t, dt);

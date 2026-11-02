@@ -18,6 +18,13 @@
   </script>
 </head>
 <body>
+  <script>
+    // đặt theme trước khi vẽ trang để không nháy trắng lúc tối (src/theme.js lo phần còn lại)
+    try {
+      var m = localStorage.getItem('nekoma-theme'), h = new Date().getHours();
+      document.documentElement.dataset.theme = m === 'light' || m === 'dark' ? m : (h >= 6 && h < 18 ? 'light' : 'dark');
+    } catch (e) {}
+  </script>
   <div id="app">
     <main id="stage">
       <div id="canvas-wrap"></div>
@@ -25,8 +32,10 @@
       <header class="hud-top">
         <div class="chips">
           <span class="chip" id="clock-chip">CẬP NHẬT LÚC --:--:--</span>
-          <button class="chip chip-usage" id="usage-chip" hidden title="Bấm để xem chi tiết lượt dùng Claude">✦ CLAUDE</button>
+          <button class="chip chip-btn chip-usage" id="usage-chip" hidden aria-expanded="false" aria-controls="usage-pop" title="Lượt dùng gói Claude của anh">✦ LƯỢT DÙNG</button>
           <span class="chip chip-mode" id="mode-chip">ĐANG KẾT NỐI…</span>
+          <button class="chip chip-btn" id="theme-chip" title="Đổi giao diện: Tự động (sáng 6:00–18:00, tối sau 18:00) → Sáng → Tối">◐ TỰ ĐỘNG</button>
+          <section class="usage-pop" id="usage-pop" hidden aria-label="Lượt dùng gói Claude"></section>
         </div>
         <nav class="tabs" id="tabs" aria-label="Chế độ xem">
           <button data-view="board">Bảng công việc</button>

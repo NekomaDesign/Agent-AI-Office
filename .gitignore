@@ -8,6 +8,7 @@
 .studio/archive/*
 .studio/session.json
 .studio/usage.jsonl
+.studio/limits.json
 !.studio/archive/.gitkeep
 outputs/*
 inputs/
