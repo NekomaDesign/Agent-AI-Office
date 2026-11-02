@@ -27,6 +27,7 @@ async function boot() {
   ui = createUI({
     theme,
     refreshUsage: () => source.refreshUsage(),
+    approve: (taskId) => source.approve(taskId),
     world,
     send: (channel, text, files) => source.send(channel, text, files),
     order: (text, files) => source.order(text, files),

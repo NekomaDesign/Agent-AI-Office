@@ -595,3 +595,18 @@ button.person:hover { text-decoration: underline; }
 :root[data-theme="dark"] .mini-more, :root[data-theme="dark"] .btn, :root[data-theme="dark"] .composer-box { border-color: var(--ink-3); }
 :root[data-theme="dark"] .avatar.human, :root[data-theme="dark"] .agent-item.human .sq, :root[data-theme="dark"] .pf-ava.human { box-shadow: 0 0 0 1px #3a3d45; }
 .review-act textarea { background: var(--surface); color: var(--ink); }
+
+/* ======================================================================
+   Nút "Duyệt & hoàn tất" dưới mỗi bản cuối gửi anh
+   ====================================================================== */
+.final-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #2f9a5c 35%, var(--line)); background: color-mix(in srgb, #2f9a5c 7%, var(--surface)); border-radius: 12px; }
+.final-act small { flex-basis: 100%; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
+.final-act.mini { margin-top: 6px; padding: 6px; gap: 6px; }
+.btn-approve { border: 0; background: #2f9a5c; color: #fff; border-radius: 9px; padding: 8px 14px; font: 700 13px var(--font); box-shadow: 0 6px 16px -8px rgba(47,154,92,.8); transition: transform .15s, background .15s; }
+.btn-approve:hover { background: #26864e; transform: translateY(-1px); }
+.btn-approve:disabled { background: #8bbf9f; cursor: progress; transform: none; }
+.final-act.mini .btn-approve { padding: 6px 11px; font-size: 12px; }
+.mini-list li.final { background: color-mix(in srgb, #2f9a5c 7%, transparent); }
+.final-tag { font-style: normal; font-weight: 800; color: #2f9a5c; }
+.act-row { display: inline-flex; gap: 6px; }
+.btn-mini.hot[data-approve] { background: #2f9a5c; border-color: #2f9a5c; }

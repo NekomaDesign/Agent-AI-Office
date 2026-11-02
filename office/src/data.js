@@ -131,7 +131,13 @@ export function startSource(onData, onMode) {
     return post('./api/limits/refresh', {});
   }
 
-  return { send, order, newSession, openFolder, setChatter, upload, refreshUsage };
+  // duyệt bản cuối: chốt ĐÃ XONG cho việc + mọi việc con ngay (không gọi Claude)
+  async function approve(taskId) {
+    if (mode === 'demo' && demo) { demo.approve(taskId); onData(normalize(demo.snapshot())); return { ok: true }; }
+    return post('./api/approve', { taskId });
+  }
+
+  return { send, order, newSession, openFolder, setChatter, upload, refreshUsage, approve };
 }
 
 // ---------- DEMO: anh Nekoma giao Grid trọn gói, Grid chia cho team. Lặp lại mỗi ~2.5 phút ----------
@@ -226,8 +232,16 @@ function createDemo() {
     content: `# Báo cáo đầu ngày 🦆\n\n**Dự án:** Autumn Café – ra mắt menu thu (Grid đang điều phối)\n\n## Đang chạy\n- **Ink** – 5 headline\n- **Pixel** – Visual direction v1\n- **Frame** – Storyboard 15s\n- **Cube** – Scene 3D ly cà phê 360°\n\n## Đã xong\n- **Brief** – Phân tích brief & lên plan\n\n## Đề xuất hôm nay\n1. Chuẩn bị sẵn logo SVG cho Cube\n2. Dành 30 phút cuối ngày duyệt bản tổng hợp của Grid\n`,
   };
 
+  const approved = new Set(); // việc anh bấm duyệt trong bản demo (tới vòng kịch bản sau thì làm lại từ đầu)
+  let approvedLoop = -1;
   return {
     setChatter(on) { chatterOn = on; },
+    approve(id) {
+      approved.add(id);
+      approvedLoop = Math.floor((Date.now() - start) / 1000 / LOOP);
+      extra.push({ channel: id, msg: { from: 'cd', to: 'manager', text: '✓ Anh duyệt bản cuối, chốt ĐÃ XONG nhé.', approved: true, time: toLocalIso(new Date()) } });
+      extra.push({ channel: COMPANY, msg: { from: 'manager', to: 'team', text: '🎉 Anh Nekoma vừa duyệt bản cuối. Cả nhà ĐÃ XONG, cảm ơn mọi người nha!', auto: true, time: toLocalIso(new Date()) } });
+    },
     post(channel, text) {
       const m = text.match(/@([a-z]+)/i);
       const tag = m ? m[1].toLowerCase() : '';
@@ -261,6 +275,13 @@ function createDemo() {
         }
       }
       for (const { channel, msg } of extra) (chats[channel] ||= []).push(msg);
+      if (approvedLoop === loop) {
+        for (const t of tasks.values()) {
+          if (!approved.has(t.id) && !approved.has(t.parent)) continue;
+          Object.assign(t, { state: 'done', progress: 100 });
+          if (agents[t.assignee]?.taskId === t.id) Object.assign(agents[t.assignee], { state: 'done', progress: 100, note: 'Anh Nekoma đã duyệt bản cuối ✓' });
+        }
+      }
       return {
         studio: { name: 'NEKOMA STUDIO', tagline: 'Creative AI Production Lab' },
         agents,
